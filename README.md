@@ -54,5 +54,11 @@ Once you have the prerequisites in place, follow these steps to perform the migr
   * Replace ```{project}``` with the name of the target Git project in Azure DevOps.
   * Replace ```{repository}``` with the name of the target Git repository.
 
+**1.4.** Push the migrated history to Azure DevOps Git Repository using the following command:
+ ``` bash
+  git push --all origin
+  ```
+  * The ```--all``` flag ensures that all local branches are pushed to the remote repository.
+
 ### :two: Work Items Migration
 Start by cloning the **TFVC-based** repository to your local machine using the following commands:

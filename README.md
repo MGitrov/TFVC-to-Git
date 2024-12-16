@@ -61,4 +61,15 @@ Once you have the prerequisites in place, follow these steps to perform the migr
   * The ```--all``` flag ensures that all local branches are pushed to the remote repository.
 
 ### :two: Work Items Migration
-Start by cloning the **TFVC-based** repository to your local machine using the following commands:
+Before we proceed with the migration, let's first understand what work items are.
+
+Work items are the building blocks for planning, tracking, and managing work in Azure DevOps. They help teams organize and monitor tasks, bugs, features, and requirements throughout the development lifecycle.
+
+**Common Work Item Types:**
+* **Epics:** A large piece of work that can be broken down into smaller pieces (e.g., Redesign the user experience for the website).
+* **Features:** Features represent what needs to be done to achieve the goal defined by the Epic.
+* **User Stories:** A small task or piece of functionality written from the perspective of the user.
+* **Bugs:** A problem or error in the application that needs fixing.
+* **Tasks:** A small piece of work needed to complete a User Story, Feature, or fix a Bug. Tasks are the actionable steps.
+
+The Getting Started guide is described [here](https://nkdagility.com/learn/azure-devops-migration-tools/getstarted/).

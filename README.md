@@ -1,7 +1,7 @@
 - [Introduction](#introduction)
 - [Prerequisites](#prerequisites)
 - [Getting Started](#getting-started)
-  - [Code and Changesets Migration](one-code-and-changesets-migration)
+  - [Code and Changesets Migration](#one-code-and-changesets-migration)
 
 # Introduction
 TFVC to Git migration guide repository.

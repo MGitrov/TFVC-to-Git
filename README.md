@@ -18,7 +18,7 @@ TFVC to Git migration guide repository.
 # Getting Started :seedling:
 Once you have the prerequisites in place, follow these steps to perform the migration:
 ### :one: Code and Changesets Migration
-Start by cloning the **TFVC-based** repository to your local machine using the following commands:
+**1.1.** Start by cloning the **TFVC-based** repository to your local machine using the following commands:
 * Cloning a TFVC-based repository from Azure DevOps Server (on-premises):
 ```Add relevant guidelines later.```
 
@@ -32,7 +32,7 @@ Start by cloning the **TFVC-based** repository to your local machine using the f
   * Replace ```$/Project/PathToTFVC``` with the TFVC repository path.
   * Replace ```{PAT}``` with your personal access token generated for your user in Azure DevOps. The required PAT scope for cloning is ```Code (Read)```.
  
-Verify the local Git repository using the following commands:
+**1.2.** Verify the local Git repository using the following commands:
 * Navigate to the cloned directory:
  ``` bash
   cd PathToLocalGitRepo
@@ -45,3 +45,14 @@ Verify the local Git repository using the following commands:
  ``` bash
   git log
   ```
+
+**1.3.** Add the Azure DevOps Git repository as a remote using the following command:
+ ``` bash
+  git remote add origin https://{organization}.visualstudio.com/{project}/_git/{repository}
+  ```
+  * Replace ```{organization}``` with your Azure DevOps organization name.
+  * Replace ```{project}``` with the name of the target Git project in Azure DevOps.
+  * Replace ```{repository}``` with the name of the target Git repository.
+
+### :two: Work Items Migration
+Start by cloning the **TFVC-based** repository to your local machine using the following commands:

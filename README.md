@@ -1,6 +1,6 @@
 - [Introduction](#introduction)
 - [Prerequisites](#prerequisites)
-- [Getting Started](#getting-started)
+- [Getting Started](#getting-started-seedling)
   - [Code and Changesets Migration](#one-code-and-changesets-migration)
 
 # Introduction
@@ -15,7 +15,7 @@ TFVC to Git migration guide repository.
   Azure DevOps Migration Tools will be used to migrate the work items and their related information.
   * **Installation:** [Instructions](https://nkdagility.com/learn/azure-devops-migration-tools/setup/installation/).
 
-# Getting Started
+# Getting Started :seedling:
 Once you have the prerequisites in place, follow these steps to perform the migration:
 ### :one: Code and Changesets Migration
 Start by cloning the **TFVC-based** repository to your local machine using the following commands:

@@ -17,7 +17,7 @@ TFVC to Git migration guide repository.
 
 # Getting Started
 Once you have the prerequisites in place, follow these steps to perform the migration:
-### 1️⃣ Code and Changeset(s) Migration
+### Code and Changeset(s) Migration
 Start by cloning the **TFVC-based** repository to your local machine using the following commands:
 * Cloning a TFVC-based repository from Azure DevOps Server (on-premises):
 ```Add relevant guidelines later.```

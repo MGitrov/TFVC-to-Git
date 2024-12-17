@@ -73,3 +73,16 @@ Work items are the building blocks for planning, tracking, and managing work in 
 * **Tasks:** A small piece of work needed to complete a User Story, Feature, or fix a Bug. Tasks are the actionable steps.
 
 The Getting Started guide is described [here](https://nkdagility.com/learn/azure-devops-migration-tools/getstarted/).
+
+**For Work Items Migration (in the ```configuration.json``` file):**
+* In Azure DevOps go to ```Organization Settings > Process > [Your Process] > Work Item Types > Epic (or another type)```.
+  * Add a custom field of type ```Text (single line)```.
+    ![image](https://github.com/user-attachments/assets/67e6a9d2-fdaa-4c1f-9ecf-aaa4277c251c)
+
+  * Add the same custom field to the rest of the work items you would like to migrate **as an existing field**.
+    ![image](https://github.com/user-attachments/assets/78bf3d31-6ffa-4f0d-95c5-577789b209d4)
+
+  * Your custom field will now be available in all work item types where it has been added, and now you can adjust the ```ReflectedWorkItemIdField``` field both in ```Source``` and ```Target``` with the custom field value.
+* Adjust the value of the ```ReflectedWorkItemIdField``` field both for ```Source``` and ```Target``` with a custom field
+* Ensure that the ```ProcessorType``` (under "Processors") is set to ```TfsWorkItemMigrationProcessor```.
+* Ensure that the ```Enabled``` field is set to ```True```.

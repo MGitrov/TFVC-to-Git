@@ -12,10 +12,12 @@ TFVC to Git migration guide repository.
 ### **:one: [git-tfs](https://github.com/git-tfs/git-tfs) (and its related prerequisites)**
   git-tfs will be used to migrate the code from a TFVC-based repository to Git while preserving the changesets (version history).
   * **Installation:** [Instructions](https://github.com/git-tfs/git-tfs?tab=readme-ov-file#get-git-tfs).
+  * **PAT (Personal Access Token):** Ensure you have generated a PAT with ```Code (Read)``` access for your user.
 
 ### **:two: [Azure DevOps Migration Tools](https://github.com/nkdAgility/azure-devops-migration-tools) (and its related prerequisites)**
   Azure DevOps Migration Tools will be used to migrate the work items and their related information.
   * **Installation:** [Instructions](https://nkdagility.com/learn/azure-devops-migration-tools/setup/installation/).
+  * **Permissions:** [Instructions](https://nkdagility.com/learn/azure-devops-migration-tools/setup/permissions/).
 
 # Getting Started :seedling:
 Once you have the prerequisites in place, follow these steps to perform the migration:
@@ -32,7 +34,7 @@ Once you have the prerequisites in place, follow these steps to perform the migr
   ```
   * Replace ```{organization}``` with your Azure DevOps organization name.
   * Replace ```$/Project/PathToTFVC``` with the TFVC repository path.
-  * Replace ```{PAT}``` with your personal access token generated for your user in Azure DevOps. The required PAT scope for cloning is ```Code (Read)```.
+  * Replace ```{PAT}``` with your personal access token generated for your user in Azure DevOps.
  
 **1.2.** Verify the local Git repository using the following commands:
 * Navigate to the cloned directory:

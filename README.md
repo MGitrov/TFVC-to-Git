@@ -84,6 +84,5 @@ The Getting Started guide is described [here](https://nkdagility.com/learn/azure
     ![image](https://github.com/user-attachments/assets/78bf3d31-6ffa-4f0d-95c5-577789b209d4)
 
   * Your custom field will now be available in all work item types where it has been added, and now you can adjust the ```ReflectedWorkItemIdField``` field both in ```Source``` and ```Target``` with the custom field value.
-* Adjust the value of the ```ReflectedWorkItemIdField``` field both for ```Source``` and ```Target``` with a custom field
 * Ensure that the ```ProcessorType``` (under "Processors") is set to ```TfsWorkItemMigrationProcessor```.
 * Ensure that the ```Enabled``` field is set to ```True```.

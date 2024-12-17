@@ -89,4 +89,63 @@ The Getting Started guide is described [here](https://nkdagility.com/learn/azure
 * Ensure that the ```Enabled``` field is set to ```True```.
 
 ### :three: Shared Queries Migration
-Before we proceed with the migration, let's first understand what work items are.
+:warning: **Migration only available for shared queries.**
+
+:warning: **Shared queries migration requires adjusting the ```EndpointType``` field, and hence this migration type will be handled in a separate ```configuration.json``` file.**
+
+Before we proceed with the migration, let's first understand what shared queries are.
+
+Shared queries are pre-defined queries that allow teams to filter and view work items (e.g., tasks, bugs, user stories) based on specific criteria. These queries are shared across the team, making them a centralized and consistent way to track progress, identify issues, or prioritize work.
+
+**In the ```configuration.json``` file:**
+ ``` json
+{
+  "Serilog": {
+    "MinimumLevel": "Information"
+  },
+  "MigrationTools": {
+    "Version": "16.0",
+    "Endpoints": {
+      "Source": {
+        "EndpointType": "TfsEndpoint",
+        "Collection": "https://dev.azure.com/nkdagility-preview/",
+        "Project": "migrationSource1",
+        "Authentication": {
+          "AuthenticationMode": "AccessToken",
+          "AccessToken": "jkashdjksahsjkfghsjkdaghvisdhuisvhladvnb"
+        }
+      },
+      "Target": {
+        "EndpointType": "TfsEndpoint",
+        "Collection": "https://dev.azure.com/nkdagility-preview/",
+        "Project": "migrationTest5",
+
+        "Authentication": {
+          "AuthenticationMode": "AccessToken",
+          "AccessToken": "lkasjioryislaniuhfhklasnhfklahlvlsdvnls"
+        },
+        "ReflectedWorkItemIdField": "Custom.ReflectedWorkItemId"
+      }
+    },
+    "CommonTools": {},
+    "Processors": [
+      {
+        "ProcessorType": "TfsSharedQueryProcessorOptions",
+        "Enabled": true,
+        "PrefixProjectToNodes": false,
+        "SharedFolderName": "Shared Queries",
+        "SourceToTargetFieldMappings": null,
+        "SourceName": "Source",
+        "TargetName": "Target"
+      }
+    ]
+  }
+}
+  ```
+* Replace ```Collection``` (both in ```Source``` and ```Target```) with your Azure DevOps organization name.
+* Replace ```Project``` (both in ```Source``` and ```Target```) with the respective project names.
+* Replace ```AccessToken``` (both in ```Source``` and ```Target```) with the PAT you have generated for your user.
+  * You may also set the ```AuthenticationMode``` (both in ```Source``` and ```Target```) field to ```Prompt``` (both in ```Source``` and ```Target```).
+* Ensure that the ```SharedFolderName``` (under "Processors") aligns with your shared queries' folder name in Azure DevOps.
+  ![image](https://github.com/user-attachments/assets/d6baa748-cdb4-430e-a5e0-965e3f40e07e)
+* Make sure to rename one of the configuration files if you are executing them from within the same directory.

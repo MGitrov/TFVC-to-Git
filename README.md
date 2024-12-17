@@ -3,6 +3,7 @@
 - [Getting Started](#getting-started-seedling)
   - [Code and Changesets Migration](#one-code-and-changesets-migration)
   - [Work Items Migration](#two-work-items-migration)
+  - [Shared Queries Migration](#three-shared-queries-migration)
 
 # Introduction
 TFVC to Git migration guide repository.
@@ -86,3 +87,6 @@ The Getting Started guide is described [here](https://nkdagility.com/learn/azure
   * Your custom field will now be available in all work item types where it has been added, and now you can adjust the ```ReflectedWorkItemIdField``` field both in ```Source``` and ```Target``` with the custom field value.
 * Ensure that the ```ProcessorType``` (under "Processors") is set to ```TfsWorkItemMigrationProcessor```.
 * Ensure that the ```Enabled``` field is set to ```True```.
+
+### :three: Shared Queries Migration
+Before we proceed with the migration, let's first understand what work items are.

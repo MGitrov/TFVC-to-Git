@@ -4,6 +4,7 @@
   - [Code and Changesets Migration](#one-code-and-changesets-migration)
   - [Work Items Migration](#two-work-items-migration)
   - [Shared Queries Migration](#three-shared-queries-migration)
+  - [Processes Migration](#four-processes-migration)
 
 # Introduction
 TFVC to Git migration guide repository.
@@ -151,3 +152,12 @@ Shared queries are pre-defined queries that allow teams to filter and view work 
 * Ensure that the ```SharedFolderName``` (under "Processors") aligns with your shared queries' folder name in Azure DevOps.
   ![image](https://github.com/user-attachments/assets/d6baa748-cdb4-430e-a5e0-965e3f40e07e)
 * Make sure to rename one of the configuration files if you are executing them from within the same directory.
+
+### :four: Processes Migration
+Before we proceed with the migration, let's first understand what processe is.
+
+A Process defines the way you manage and track work in your project. It is like a template that defines how work is managed in your project.
+
+A Process determines work item types you can use (e.g., Epics, Features, User Stories, Bugs, Tasks), along with the fields (e.g., Title, Description, Priority) and workflow states (e.g., To Do, In Progress, Done) for those work items.
+
+Every project in Azure DevOps is based on a process, which governs how work items behave.

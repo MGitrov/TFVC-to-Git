@@ -2,6 +2,7 @@
 - [Prerequisites](#prerequisites)
 - [Getting Started](#getting-started-seedling)
   - [Code and Changesets Migration](#one-code-and-changesets-migration)
+  - [Work Items Migration](#two-work-items-migration)
 
 # Introduction
 TFVC to Git migration guide repository.

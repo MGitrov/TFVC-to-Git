@@ -154,10 +154,25 @@ Shared queries are pre-defined queries that allow teams to filter and view work 
 * Make sure to rename one of the configuration files if you are executing them from within the same directory.
 
 ### :four: Processes Migration
-Before we proceed with the migration, let's first understand what processe is.
+Before we proceed with the migration, let's first understand what process is.
 
-A Process defines the way you manage and track work in your project. It is like a template that defines how work is managed in your project.
+A Process in Azure DevOps defines the way you manage and track work in your project. It is like a template that defines how work is managed in your project.
 
 A Process determines work item types you can use (e.g., Epics, Features, User Stories, Bugs, Tasks), along with the fields (e.g., Title, Description, Priority) and workflow states (e.g., To Do, In Progress, Done) for those work items.
 
 Every project in Azure DevOps is based on a process, which governs how work items behave.
+
+### :five: Pipelines Migration
+Before we proceed with the migration, let's first understand what pipeline is.
+
+A Pipeline in Azure DevOps is a workflow automation tool that allows you to build, test, and deploy your code automatically.
+
+**Types of Pipelines:**
+* **Build Pipelines:** Focus on compiling code, running tests, and creating build artifacts.
+  * Example: Compile a Java application and package it into a ```.jar``` file.
+* **Release Pipelines:** Focus on deploying build artifacts to environments, such as staging or production.
+  * Example: Deploy a Docker image to a Kubernetes cluster.
+* **Multi-Stage Pipelines:** Combine both build and release processes into a single YAML-defined pipeline.
+  * Example: Build, test, and deploy a web application in one cohesive workflow.
+
+ 

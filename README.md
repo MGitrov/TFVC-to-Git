@@ -25,14 +25,19 @@ TFVC to Git migration guide repository.
 
 # Getting Started :seedling:
 Once you have the prerequisites in place, follow these steps to perform the migration:
-### :four: Processes Migration
+### :one: Processes Migration
 Before we proceed with the migration, let's first understand what process is.
 
 A Process in Azure DevOps defines the way you manage and track work in your project. It is like a template that defines how work is managed in your project.
 
 A Process determines work item types you can use (e.g., Epics, Features, User Stories, Bugs, Tasks), along with the fields (e.g., Title, Description, Priority) and workflow states (e.g., To Do, In Progress, Done) for those work items.
 
-Every project in Azure DevOps is based on a process, which governs how work items behave.
+Every project in Azure DevOps is based on a process, which governs how work items behave. Because of that, the processes will be migrated first.
+
+Processes migration will be handled manually as some work item types are locked in Azure DevOps, or the migration tools has partial support for such case. **Hence, to ensure a full migration, the processes will be built manually in the target organization(s).**
+
+### :two: Teams Migration
+Before we proceed with the migration, let's first understand what process is.
 
 ### :one: Code and Changesets Migration
 **1.1.** Start by cloning the **TFVC-based** repository to your local machine using the following commands:

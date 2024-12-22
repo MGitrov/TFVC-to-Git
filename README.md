@@ -42,7 +42,15 @@ Before we proceed with the migration, let's first understand what process is.
 ### :one: Code and Changesets Migration
 **1.1.** Start by cloning the **TFVC-based** repository to your local machine using the following commands:
 * Cloning a TFVC-based repository from Azure DevOps Server (on-premises):
-```Add relevant guidelines later.```
+  1. Navigate from within the command prompt or terminal to the directory where you want to create the local repository.
+  2. Clone the TFVC repository with full history using the following command:
+  ``` bash
+  git tfs clone --branches=all https://tfs-server:8080/tfs/Collection $/Project/Main .
+  ```
+  * Replace ```https://tfs-server:8080/tfs/Collection``` with your Azure DevOps' Server collection URL.
+  * Replace ```$/Project/Main``` with a path to one of your repository's branch. Basically, it will alow ```git-tfs``` to detect related branches, and make every branch in the TFVC repository a branch in the Git repository.
+  
+  3. (Optional) Verify that the cloning went well using the ```git tfs verify --all``` command.
 
 * Cloning a TFVC-based repository from Azure DevOps Services (cloud environment):
   1. Navigate from within the command prompt or terminal to the directory where you want to create the local repository.
@@ -70,17 +78,19 @@ Before we proceed with the migration, let's first understand what process is.
 
 **1.3.** Add the Azure DevOps Git repository as a remote using the following command:
  ``` bash
-  git remote add origin https://{organization}.visualstudio.com/{project}/_git/{repository}
+  git remote add origin https://{organization}@dev.azure.com/{organization}/{project}/_git/{repository}
   ```
   * Replace ```{organization}``` with your Azure DevOps organization name.
   * Replace ```{project}``` with the name of the target Git project in Azure DevOps.
   * Replace ```{repository}``` with the name of the target Git repository.
+  * The URL also can be taken from the project's web portal in Azure DevOps.
 
 **1.4.** Push the migrated history to Azure DevOps Git Repository using the following command:
  ``` bash
   git push --all origin
   ```
   * The ```--all``` flag ensures that all local branches are pushed to the remote repository.
+  * In this sub-step, ensure you are able to authenticate via the CLI in order to ```push``` to the remote repository.
 
 ### :two: Work Items Migration
 Before we proceed with the migration, let's first understand what work items are.

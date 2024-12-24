@@ -39,6 +39,90 @@ Processes migration will be handled manually as some work item types are locked 
 ### :two: Teams Migration
 Before we proceed with the migration, let's first understand what process is.
 
+### TEMPLATE ```configuration.json``` FILE
+ ``` json
+{
+  "Serilog": {
+    "MinimumLevel": "Debug" # Configures logging.
+  },
+
+  "MigrationTools": {
+    "Version": "16.0",
+
+    "CommonEnrichersConfig": [
+      {
+          "CommonTools": {
+              "TfsNodeStructureTool": {
+                  "Areas": {
+                      "Filters": [ # Configures which area paths are included in the migration.
+                          "*\\TFS-based test project",
+                          "*\\TFS-based test project\\**"
+                      ],
+                      "Mappings": {
+                        "^TFS-based test project([\\\\/]?.*)$": "migratedFromTFS$1"
+                      }
+                  },
+
+                  "Enabled": true,
+                  "Iterations": {
+                      "Filters": [
+                          "*\\TFS-based test project",
+                          "*\\TFS-based test project\\**"
+                      ],
+                      "Mappings": {
+                          "^TFS-based test project([\\\\/]?.*)$": "migratedFromTFS$1"
+                      }
+                  },
+                  "ReplicateAllExistingNodes": false,
+                  "ShouldCreateMissingRevisionPaths": true
+              }
+          }
+      }
+  ],
+
+    "Endpoints": {
+      "Source": {
+        "EndpointType": "TfsTeamProjectEndpoint",
+        "Collection": "https://dev.azure.com/maximpetrov2612/",
+        "Project": "TFS-based test project",
+        "Authentication": {
+          "AuthenticationMode": "AccessToken",
+          "AccessToken": "6TyfmEoC3XebuKMKe0sbxljyuvUEF4dO7R506tk4l6VvRfkDhbqaJQQJ99ALACAAAAAUWlgUAAASAZDOLL2h"
+        },
+        "ReflectedWorkItemIdField": "MigrationReflectedWorkItemId"
+      },
+
+      "Target": {
+        "EndpointType": "TfsTeamProjectEndpoint",
+        "Collection": "https://dev.azure.com/maximpetrov1297/",
+        "Project": "migrationTargetProject",
+        "Authentication": {
+          "AuthenticationMode": "AccessToken",
+          "AccessToken": "ElqyAOH82xCHk2hZJ6dhPRmcGowJG4pLGIEcSj1xeYgeDKhWQPLeJQQJ99ALACAAAAAUWlgUAAASAZDOhzh2"
+        },
+        "ReflectedWorkItemIdField": "MigrationReflectedWorkItemId"
+      }
+    },
+    
+    "Processors": [
+      {
+        "ProcessorType": "TfsWorkItemMigrationProcessor",
+        "Enabled": true,
+        "UpdateCreatedDate": true,
+        "UpdateCreatedBy": true,
+        "WIQLQuery": "SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @TeamProject AND [System.WorkItemType] NOT IN ('Test Suite', 'Test Plan','Shared Steps','Shared Parameter','Feedback Request') ORDER BY [System.ChangedDate] desc",
+        "FixHtmlAttachmentLinks": true,
+        "WorkItemCreateRetryLimit": 5,
+        "FilterWorkItemsThatAlreadyExistInTarget": false,
+        "GenerateMigrationComment": false,
+        "SourceName": "Source",
+        "TargetName": "Target"
+      }
+    ]
+  }
+}
+  ```
+
 ### :one: Code and Changesets Migration
 **1.1.** Start by cloning the **TFVC-based** repository to your local machine using the following commands:
 * Cloning a TFVC-based repository from Azure DevOps Server (on-premises):

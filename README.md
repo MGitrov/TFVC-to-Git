@@ -49,38 +49,25 @@ Before we proceed with the migration, let's first understand what process is.
   "MigrationTools": {
     "Version": "16.0",
 
-    "CommonEnrichersConfig": [
-      {
-          "CommonTools": {
-              "TfsNodeStructureTool": {
-                  "Areas": {
-                      "Filters": [ # Configures which area paths are included in the migration.
-                          "*\\TFS-based test project", # Includes the root area path (e.g., TFS-based test project).
-                          "*\\TFS-based test project\\**" # Includes sub-paths recursively (e.g., TFS-based test project\Team A, TFS-based test project\Sub\Team C).
-                      ],
-                      "Mappings": { # Transforms area paths from the source to target.
-                        "^TFS-based test project([\\\\/]?.*)$": "migratedFromTFS$1"
-                        # "^TFS-based test project([\\\\/]?.*)$" captures the source area path. This regex target paths that start with "TFS-based test project", and optionally have a backslash (\) and any subsequent sub-paths.
-                        # "migratedFromTFS$1" defines path structure of the captured source area path in the target project.
-                      }
-                  },
-
-                  "Enabled": true,
-                  "Iterations": {
-                      "Filters": [
-                          "*\\TFS-based test project",
-                          "*\\TFS-based test project\\**"
-                      ],
-                      "Mappings": {
-                          "^TFS-based test project([\\\\/]?.*)$": "migratedFromTFS$1"
-                      }
-                  },
-                  "ReplicateAllExistingNodes": false,
-                  "ShouldCreateMissingRevisionPaths": true
-              }
-          }
+    "CommonTools": {
+      "TfsTeamSettingsTool": {
+          "Enabled": true
+        },
+        
+      "TfsNodeStructureTool": {
+          "Areas": {
+              "Filters": [],
+              "Mappings": {}
+          },
+          "Enabled": true,
+          "Iterations": {
+              "Filters": [],
+              "Mappings": {}
+          },
+          "ReplicateAllExistingNodes": true, # Controls whether all area and iteration paths from the source project are replicated in the target project, regardless of filters or mappings.
+          "ShouldCreateMissingRevisionPaths": false # Ensures that specific paths (as per mappings and filters) are created in the target project if they are missing.
       }
-  ],
+    },
 
     "Endpoints": {
       "Source": {
@@ -102,7 +89,7 @@ Before we proceed with the migration, let's first understand what process is.
           "AuthenticationMode": "AccessToken",
           "AccessToken": "PAT"
         },
-        "ReflectedWorkItemIdField": "MigrationReflectedWorkItemId"
+        "ReflectedWorkItemIdField": "Custom.MigrationReflectedWorkItemId"
       }
     },
     
@@ -124,6 +111,7 @@ Before we proceed with the migration, let's first understand what process is.
   }
 }
   ```
+
 
 ### :one: Code and Changesets Migration
 **1.1.** Start by cloning the **TFVC-based** repository to your local machine using the following commands:

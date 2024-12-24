@@ -55,11 +55,13 @@ Before we proceed with the migration, let's first understand what process is.
               "TfsNodeStructureTool": {
                   "Areas": {
                       "Filters": [ # Configures which area paths are included in the migration.
-                          "*\\TFS-based test project",
-                          "*\\TFS-based test project\\**"
+                          "*\\TFS-based test project", # Includes the root area path (e.g., TFS-based test project).
+                          "*\\TFS-based test project\\**" # Includes sub-paths recursively (e.g., TFS-based test project\Team A, TFS-based test project\Sub\Team C).
                       ],
-                      "Mappings": {
+                      "Mappings": { # Transforms area paths from the source to target.
                         "^TFS-based test project([\\\\/]?.*)$": "migratedFromTFS$1"
+                        # "^TFS-based test project([\\\\/]?.*)$" captures the source area path. This regex target paths that start with "TFS-based test project", and optionally have a backslash (\) and any subsequent sub-paths.
+                        # "migratedFromTFS$1" defines path structure of the captured source area path in the target project.
                       }
                   },
 
@@ -87,7 +89,7 @@ Before we proceed with the migration, let's first understand what process is.
         "Project": "TFS-based test project",
         "Authentication": {
           "AuthenticationMode": "AccessToken",
-          "AccessToken": "6TyfmEoC3XebuKMKe0sbxljyuvUEF4dO7R506tk4l6VvRfkDhbqaJQQJ99ALACAAAAAUWlgUAAASAZDOLL2h"
+          "AccessToken": "PAT"
         },
         "ReflectedWorkItemIdField": "MigrationReflectedWorkItemId"
       },
@@ -98,7 +100,7 @@ Before we proceed with the migration, let's first understand what process is.
         "Project": "migrationTargetProject",
         "Authentication": {
           "AuthenticationMode": "AccessToken",
-          "AccessToken": "ElqyAOH82xCHk2hZJ6dhPRmcGowJG4pLGIEcSj1xeYgeDKhWQPLeJQQJ99ALACAAAAAUWlgUAAASAZDOhzh2"
+          "AccessToken": "PAT"
         },
         "ReflectedWorkItemIdField": "MigrationReflectedWorkItemId"
       }

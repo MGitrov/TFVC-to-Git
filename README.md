@@ -36,6 +36,11 @@ Every project in Azure DevOps is based on a process, which governs how work item
 
 Processes migration will be handled manually as some work item types are locked in Azure DevOps, or the migration tools has partial support for such case. **Hence, to ensure a full migration, the processes will be built manually in the target organization(s).**
 
+export XML using witadmin ([guide](https://learn.microsoft.com/en-us/azure/devops/reference/witadmin/witadmin-import-export-process-configuration?view=azure-devops)) :
+``` bash
+witadmin exportprocessconfig /collection:CollectionURL /p:ProjectName /f:"DirectoryPath\ProcessConfiguration.xml"
+```
+
 ### :two: Teams Migration
 Before we proceed with the migration, let's first understand what process is.
 
@@ -250,7 +255,7 @@ Shared queries are pre-defined queries that allow teams to filter and view work 
 * Replace ```Project``` (both in ```Source``` and ```Target```) with the respective project names.
 * Replace ```AccessToken``` (both in ```Source``` and ```Target```) with the PAT you have generated for your user.
   * You may also set the ```AuthenticationMode``` (both in ```Source``` and ```Target```) field to ```Prompt``` (both in ```Source``` and ```Target```).
-* Ensure that the ```SharedFolderName``` (under "Processors") aligns with your shared queries' folder name in Azure DevOps.
+* Ensure that the ```SharedFolderName``` (under "Processors") aligns with your shared queries' folder name in Azure DevOps (source proj).
   ![image](https://github.com/user-attachments/assets/d6baa748-cdb4-430e-a5e0-965e3f40e07e)
 * Make sure to rename one of the configuration files if you are executing them from within the same directory.
 

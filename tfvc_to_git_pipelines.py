@@ -3,7 +3,6 @@ import base64
 import requests
 import json
 import yaml
-import re
 from dotenv import load_dotenv
 
 load_dotenv()

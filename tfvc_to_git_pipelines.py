@@ -209,7 +209,7 @@ def convert_to_yaml(pipeline_config, pipeline_yaml_config, target_repository):
     yaml_format_pipeline["pool"] = {"name": selected_pool["name"]}
 
     """
-    Classic pipelines rely on "displayName" to describe each step. They don’t include the exact task name and version required by YAML pipelines.
+    Classic pipelines rely on "displayName" to describe each step. They don't include the exact task name and version required by YAML pipelines.
     The purpose of the mapping is to translate "displayName" (human-readable descriptions of tasks in the classic pipeline) into the correct task identifiers used in YAML pipelines.
     """
     task_name_mapping = {

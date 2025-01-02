@@ -43,7 +43,7 @@ def list_source_pipelines():
             print(f"[INFO] There are {len(pipelines)} pipelines in '{SOURCE_ORGANIZATION}'.")
 
             for pipeline in pipelines:
-                print(f"  - Pipeline ID: {pipeline["id"]} | Name: {pipeline["name"]}")
+                print(f"- Pipeline ID: {pipeline["id"]} | Name: {pipeline["name"]}")
 
             return pipelines
         
@@ -120,7 +120,7 @@ def fetch_pipeline_yaml(organization, project, pipeline_id, authentication_heade
 
 def fetch_agent_pools(organization, authentication_header):
     """
-    This function fetches the list of the available agent pool(s) for an organization.
+    This function fetches the available agent pool(s) for an organization.
     """
     url = f"{organization}/_apis/distributedtask/pools?api-version=6.0-preview"
 
@@ -218,17 +218,47 @@ def convert_to_yaml(pipeline_config, pipeline_yaml_config, target_repository):
         if "task" in step
     }
 
+    """
+    There might be cases where the "variables" field within the pipeline's configuration file is empty but populated in the exported YAML file, and vice-versa.
+    The script will check both configuration files and populate the new generated configuration file with the one that is populated, giving preference to the exported YAML if both
+    are populated.
+    """
     # Extracts the "variables" section from the exported YAML file.
     yaml_variables = pipeline_yaml_config.get("variables", [])
-    formatted_variables = {}
+    exported_variables = {}
 
     # Processes the "variables" into the desired format.
     for variable in yaml_variables:
         if isinstance(variable, dict) and "name" in variable and "value" in variable:
             name_parts = variable["name"].split(".")[-1]  # Extracts only the last part of the variable name.
-            formatted_variables[name_parts] = variable["value"]
+            exported_variables[name_parts] = variable["value"]
+
+    # Extracts the "variables" section from the classic pipeline configuration
+    config_variables = pipeline_config.get("variables", {})
+    classic_variables = {}
+
+    # Process variables if available in classic pipeline config
+    if config_variables:
+        for var_name, var_props in config_variables.items():
+            if isinstance(var_props, dict) and "value" in var_props:
+                classic_variables[var_name] = var_props["value"]
+
+            else:
+                classic_variables[var_name] = var_props
+
+    # Preferes the exported YAML's "variables" section if both are populated, otherwise fallback.
+    if exported_variables:
+        yaml_format_pipeline["variables"] = exported_variables
+        print("[INFO] Using variables from the exported YAML file.")
+
+    elif classic_variables:
+        yaml_format_pipeline["variables"] = classic_variables
+        print("[INFO] Using variables from the classic pipeline configuration.")
+        
+    else:
+        print("[WARNING] No variables found in either configuration.")
     
-    yaml_format_pipeline["variables"] = formatted_variables
+    #yaml_format_pipeline["variables"] = formatted_variables
 
 
     for phase in pipeline_config["process"]["phases"]: # Extracts all phases in the classic pipeline's process configuration.
@@ -350,13 +380,13 @@ def adjust_pipeline_config(pipeline_config, target_repositories): # DEPRECATED.
     This function adjusts the pipeline configuration from a classic pipeline form (web editor) to YAML-based pipeline form.
     """
     print("##############################")
-    print(f"[INFO] Adjusting configuration for pipeline '{pipeline_config.get('name')}'...")
+    print(f"[INFO] Adjusting configuration for pipeline '{pipeline_config.get("name")}'...")
 
     repository_name = "migrationTargetProject"  # The target repository where the YAML pipeline will be stored.
 
-    target_repository = next((repo for repo in target_repositories if repo["name"] == repository_name), None) # Ensures that "repository_name" is valid and available in the target project.
+    target_repository = next((repository for repository in target_repositories if repository["name"] == repository_name), None) # Ensures that "repository_name" is valid and available in the target project.
     if not target_repository:
-        raise ValueError(f"[ERROR] Repository '{repository_name}' not found in '{TARGET_ORGANIZATION}'.")
+        raise ValueError(f"[ERROR] repository '{repository_name}' not found in '{TARGET_ORGANIZATION}'.")
 
     # Checks if "target_repository" contains the required "id" and "name" fields.
     if "id" not in target_repository or "name" not in target_repository:
@@ -370,7 +400,7 @@ def adjust_pipeline_config(pipeline_config, target_repositories): # DEPRECATED.
             "path": yaml_file_location,
             "repository": {
                 "id": target_repository["id"],
-                "type": "azureReposGit",  # Ensure 'azureReposGit' is used
+                "type": "azurerepositorysGit",  # Ensure 'azurerepositorysGit' is used
                 "name": target_repository["name"]
             },
             "type": "yaml"
@@ -470,18 +500,35 @@ def select_commit_branch(target_repository):
     else:
         raise ValueError("[ERROR] Please select a valid number from the list.")
 
-if __name__ == "__main__":
-    fetch_agent_pools(TARGET_ORGANIZATION, TARGET_AUTHENTICATION_HEADER)
+def migrate_pipelines(source_organization, target_organization, source_project, target_project, source_headers, target_headers):
+    """
+    This function migrates TFVC-based pipelines from a source project to a target project.
+    """
+    print("##############################")
+    print("[INFO] Starting pipeline migration process...")
+    print(f"[DEBUG] Source Organization: {source_organization}")
+    print(f"[DEBUG] Target Organization: {target_organization}")
+    print(f"[DEBUG] Source Project: {source_project}")
+    print(f"[DEBUG] Target Project: {target_project}")
 
-    pass
-    # Fetches the target repositories.
-    target_repos = requests.get(
-        f"{TARGET_ORGANIZATION}/{TARGET_PROJECT}/_apis/git/repositories?api-version=6.0",
-        headers=TARGET_AUTHENTICATION_HEADER
-    ).json()["value"]
+    try:
+        # Fetches target repositories.
+        target_repositories = requests.get(
+            f"{target_organization}/{target_project}/_apis/git/repositories?api-version=6.0-preview",
+            headers=target_headers
+        ).json()["value"]
 
-    # Fetches pipelines from the source project
-    pipelines = list_source_pipelines()
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch target repositories: {e}")
+        return
+
+    try:
+        # Fetches pipelines from the source project.
+        pipelines = list_source_pipelines()
+
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch pipelines from the source project: {e}")
+        return
 
     if pipelines:
         print("\n[INFO] Fetching pipelines completed.")
@@ -489,42 +536,64 @@ if __name__ == "__main__":
 
         for pipeline in pipelines:
             if pipeline["id"] in selected_pipeline_ids:
-                print(f"##############################>-{pipeline['name']}-<##############################")
-                pipeline_id = pipeline["id"]
-                pipeline_name = pipeline["name"]
-                pipeline_config = get_pipeline_config(pipeline_id)
+                try:
+                    print(f"##############################>-{pipeline["name"]}-<##############################")
+                    pipeline_id = pipeline["id"]
+                    pipeline_name = pipeline["name"]
+                    pipeline_config = get_pipeline_config(pipeline_id)
 
-                # Fetches the YAML format of the pipeline
-                yaml_content = fetch_pipeline_yaml(
-                    SOURCE_ORGANIZATION,
-                    SOURCE_PROJECT,
-                    pipeline_id,
-                    SOURCE_AUTHENTICATION_HEADER
-                )
+                    # Fetches the YAML format of the pipeline.
+                    yaml_content = fetch_pipeline_yaml(
+                        source_organization,
+                        source_project,
+                        pipeline_id,
+                        source_headers
+                    )
 
-                # Allow user to choose which repository to commit to
-                print("\nAvailable Target Repositories:")
-                for idx, repo in enumerate(target_repos, 1):
-                    print(f"{idx} - {repo['name']} (ID: {repo['id']})")
-                repo_selection = input("\nEnter the number of the target repository (or press Enter for all): ").strip()
+                except Exception as e:
+                    print(f"[ERROR] Failed to fetch or process pipeline '{pipeline["name"]}': {e}")
+                    continue
 
-                if repo_selection.isdigit():
-                    repo_index = int(repo_selection) - 1
-                    if 0 <= repo_index < len(target_repos):
-                        target_repos = [target_repos[repo_index]]
-                    else:
-                        print(f"[WARNING] Invalid repository selection. Proceeding with all repositories.")
+                try:
+                    # Prompts the user to choose which repository to commit to.
+                    print("\nAvailable target repositories:")
+                    for idx, repository in enumerate(target_repositories, 1):
+                        print(f"{idx} - {repository["name"]} (ID: {repository["id"]})")
+                    repository_selection = input("\nEnter the number of the target repository (or press Enter for all): ").strip()
 
-                print(f"[DEBUG] Target repositories list:\n{json.dumps(target_repos, indent=4)}")
-                # Migrate pipeline to the selected repositories
-                for repo in target_repos:
-                    if isinstance(repo, dict):  # Ensure repo is a dictionary
-                        generated_yaml = convert_to_yaml(pipeline_config, yaml_content, repo)
-                        #print(f"[DEBUG] Current repository object: {repo}")
-                        success = commit_yaml_to_target_repository(pipeline_name, generated_yaml, repo)
-                        if success:
-                            print(f"[SUCCESS] Pipeline '{pipeline_name}' migrated to repository '{repo['name']}'.")
+                    if repository_selection.isdigit():
+                        repository_index = int(repository_selection) - 1
+                        if 0 <= repository_index < len(target_repositories):
+                            target_repositories = [target_repositories[repository_index]]
                         else:
-                            print(f"[ERROR] Failed to migrate pipeline '{pipeline_name}' to repository '{repo['name']}'.")
-                    else:
-                        print(f"[ERROR] Invalid repository object: {repo}")
+                            print(f"[WARNING] Invalid repository selection. Proceeding with all repositories.")
+
+                    print(f"[DEBUG] Target repositories list:\n{json.dumps(target_repositories, indent=4)}")
+
+                except Exception as e:
+                    print(f"[ERROR] Failed during repository selection: {e}")
+                    continue
+
+                # Migrates the pipeline(s) to the selected repositories.
+                for repository in target_repositories:
+                    try:
+                        if isinstance(repository, dict):  # Ensures repository is a dictionary
+                            generated_yaml = convert_to_yaml(pipeline_config, yaml_content, repository)
+                            success = commit_yaml_to_target_repository(pipeline_name, generated_yaml, repository)
+
+                            if success:
+                                print(f"[SUCCESS] Pipeline '{pipeline_name}' migrated to repository '{repository["name"]}'.")
+
+                            else:
+                                print(f"[ERROR] Failed to migrate pipeline '{pipeline_name}' to repository '{repository["name"]}'.")
+
+                        else:
+                            print(f"[ERROR] Invalid repository object: {repository}")
+
+                    except Exception as e:
+                        print(f"[ERROR] An error occurred while migrating pipeline '{pipeline_name}' to repository '{repository["name"]}': {e}")
+    else:
+        print("[INFO] No pipelines found to migrate.")
+
+if __name__ == "__main__":
+    migrate_pipelines(SOURCE_ORGANIZATION, TARGET_ORGANIZATION, SOURCE_PROJECT, TARGET_PROJECT, SOURCE_AUTHENTICATION_HEADER, TARGET_AUTHENTICATION_HEADER)

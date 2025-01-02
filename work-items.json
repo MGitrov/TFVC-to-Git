@@ -1,0 +1,74 @@
+{
+  "Serilog": {
+      "MinimumLevel": "Debug"
+  },
+  "MigrationTools": {
+      "Version": "16.0",
+
+
+      "CommonTools": {
+          "TfsTeamSettingsTool": {
+              "Enabled": true
+          },
+
+          "TfsNodeStructureTool": {
+              "Areas": {
+                  "Filters": [],
+                  "Mappings": {}
+              },
+              "Enabled": true,
+              "Iterations": {
+                  "Filters": [],
+                  "Mappings": {}
+              },
+              "ReplicateAllExistingNodes": true,
+              "ShouldCreateMissingRevisionPaths": true
+          },
+
+          "WorkItemTypeMappingTool": {
+              "Enabled": false,
+              "Mappings": {}
+          }
+      },
+
+      "Endpoints": {
+          "Source": {
+              "EndpointType": "TfsTeamProjectEndpoint",
+              "Collection": "Source collection/organization URL",
+              "Project": "Source project name",
+              "Authentication": {
+                  "AuthenticationMode": "AccessToken",
+                  "AccessToken": "PAT"
+              },
+              "ReflectedWorkItemIdField": "ReflectedWorkItemId"
+          },
+          "Target": {
+              "EndpointType": "TfsTeamProjectEndpoint",
+              "Collection": "Target collection/organization URL",
+              "Project": "Target project name",
+
+              "Authentication": {
+                  "AuthenticationMode": "AccessToken",
+                  "AccessToken": "PAT"
+              },
+              "ReflectedWorkItemIdField": "Custom.ReflectedWorkItemId"
+          }
+      },
+
+      "Processors": [
+          {
+              "ProcessorType": "TfsWorkItemMigrationProcessor",
+              "Enabled": true,
+              "UpdateCreatedDate": true,
+              "UpdateCreatedBy": true,
+              "WIQLQuery": "SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @TeamProject AND [System.WorkItemType] NOT IN ('Test Suite', 'Test Plan','Shared Steps','Shared Parameter','Feedback Request') ORDER BY [System.ChangedDate] desc",
+              "FixHtmlAttachmentLinks": true,
+              "WorkItemCreateRetryLimit": 5,
+              "FilterWorkItemsThatAlreadyExistInTarget": false,
+              "GenerateMigrationComment": true,
+              "SourceName": "Source",
+              "TargetName": "Target"
+          }
+      ]
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "Serilog": {
+    "MinimumLevel": "Debug"
+  },
+  "MigrationTools": {
+    "Version": "16.0",
+    
+    "Endpoints": {
+      "Source": {
+        "EndpointType": "TfsEndpoint",
+        "Collection": "Source collection/organization URL",
+        "Project": "Source project name",
+        "Authentication": {
+          "AuthenticationMode": "AccessToken",
+          "AccessToken": "PAT"
+        },
+        "ReflectedWorkItemIdField": "ReflectedWorkItemId"
+      },
+      "Target": {
+        "EndpointType": "TfsEndpoint",
+        "Collection": "Target collection/organization URL",
+        "Project": "Target project name",
+        "Authentication": {
+          "AuthenticationMode": "AccessToken",
+          "AccessToken": "PAT"
+        },
+        "ReflectedWorkItemIdField": "ReflectedWorkItemId"
+      }
+    },
+
+    "Processors": [
+      {
+        "ProcessorType": "TfsSharedQueryProcessorOptions",
+        "Enabled": true,
+        "PrefixProjectToNodes": false,
+        "SharedFolderName": "Shared Queries",
+        "SourceToTargetFieldMappings": null,
+        "SourceName": "Source",
+        "TargetName": "Target"
+      }
+    ]
+  }
+}

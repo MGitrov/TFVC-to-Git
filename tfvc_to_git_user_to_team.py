@@ -26,7 +26,11 @@ def get_project_id(organization, project_name, authentication_header):
     '''
     This function fetches the id of a project.
     '''
-    url = f"https://dev.azure.com/{organization}/_apis/projects/{project_name}?api-version=6.0-preview"
+    if "localhost" in organization: # Gets a project id from the on-premises.
+        url = f"{organization}/_apis/projects/{project_name}?api-version=6.0-preview"
+
+    else: # Gets a project id from the cloud.
+        url = f"https://dev.azure.com/{organization}/_apis/projects/{project_name}?api-version=6.0-preview"
 
     print("##############################")
     print(f"[INFO] Fetching the id of '{project_name}' project from '{organization}'...")
@@ -56,7 +60,11 @@ def get_teams(organization, project_id, authentication_header):
     '''
     This function fetches the teams of a project.
     '''
-    url = f"https://dev.azure.com/{organization}/_apis/projects/{project_id}/teams?api-version=6.0-preview"
+    if "localhost" in organization: # Gets a project id from the on-premises.
+        url = f"{organization}/_apis/projects/{project_id}/teams?api-version=6.0-preview"
+
+    else: # Gets a project id from the cloud.
+        url = f"https://dev.azure.com/{organization}/_apis/projects/{project_id}/teams?api-version=6.0-preview"
     
     print("##############################")
     print(f"[INFO] Fetching the teams of '{project_id}' project id from '{organization}'...")
@@ -124,7 +132,7 @@ def get_all_users(organization, authentication_header):
     '''
     This function fetches all users in an environment.
     '''
-    url = f"https://vssps.dev.azure.com/{organization}/_apis/graph/users?api-version=6.0-preview"
+    url = f"https://vsaex.dev.azure.com/{organization}/_apis/userentitlements?api-version=6.0-preview"
 
     print("##############################")
     print(f"[INFO] Fetching the users of the '{organization}' organization...")
@@ -135,12 +143,11 @@ def get_all_users(organization, authentication_header):
         print(f"[DEBUG] Request's Status Code: {response.status_code}")
 
         if response.status_code == 200:
-            users = response.json().get('value', [])
-            users = [user for user in users if "mailAddress" in user and user["mailAddress"]] # Filters out users without an email address.
+            users = response.json().get("members", [])
 
             print(f"Found {len(users)} users:")
             for idx, user in enumerate(users):
-                print(f"{idx + 1}. {user["mailAddress"]}")
+                print(f"{idx + 1}. {user["user"]["displayName"]} - {user["id"]}")
 
         else:
             print(f"[ERROR] Failed to fetch the users of the '{organization}' organization.")
@@ -216,6 +223,8 @@ def assign_users_to_team(source_organization, target_organization, source_projec
     print(f"[DEBUG] Source Project: {source_project}")
     print(f"[DEBUG] Target Project: {target_project}")
 
+    target_users = get_all_users(TARGET_ORGANIZATION, TARGET_AUTHENTICATION_HEADER)
+
     source_project_id = get_project_id(source_organization, source_project, source_headers)
     target_project_id = get_project_id(target_organization, target_project, target_headers)
 
@@ -237,8 +246,6 @@ def assign_users_to_team(source_organization, target_organization, source_projec
             print(f"\nMigrating members from '{source_team["name"]}' to '{target_team["name"]}'...")
 
             team_members = get_team_members(source_organization, source_project_id, source_team["id"], source_headers)
-
-            team_members = get_team_members(source_organization, source_project_id, source_team["id"], source_headers)
             team_admins = [member for member in team_members if member.get("isTeamAdmin", False)]  # Extracts team admins.
 
             if not team_members:
@@ -246,24 +253,42 @@ def assign_users_to_team(source_organization, target_organization, source_projec
                 continue
 
             for team_member in team_members:
-                email = team_member["identity"]["uniqueName"]
-                member_id = team_member["identity"]["id"]
-                accept = input(f"Do you want to add '{email}' to '{target_team["name"]}'? (Yes/No/All): ").strip().lower()
+                team_member_display_name = team_member["identity"].get("displayName", "Unknown")
+
+
+                # Checks whether the display name exists in the target environment users.
+                matching_user = next((user for user in target_users if user["user"]["displayName"] == team_member_display_name), None)
+
+                if not matching_user:
+                    print(f"[WARNING] No matching user found in the target environment for '{team_member_display_name}'. Skipping...")
+                    continue
+
+                target_user_id = matching_user["id"]
+
+                accept = input(f"Do you want to add '{team_member_display_name}' to '{target_team["name"]}'? (Yes/No/All): ").strip().lower()
 
                 if accept == "yes":
-                    add_user_to_team(target_organization, target_team["id"], member_id, email, target_headers)
+                    add_user_to_team(target_organization, target_team["id"], target_user_id, team_member_display_name, target_headers)
 
-                    if email in [admin["identity"]["uniqueName"] for admin in team_admins]:
-                        set_team_admin(target_organization, target_project_id, target_team["id"], member_id, target_headers)
+                    if team_member_display_name in [admin["identity"]["displayName"] for admin in team_admins]:
+                        set_team_admin(target_organization, target_project_id, target_team["id"], target_user_id, target_headers)
 
                 elif accept == "all":
                     for remaining_team_member in team_members:
-                        email = remaining_team_member["identity"]["uniqueName"]
-                        member_id = remaining_team_member["identity"]["id"]
-                        add_user_to_team(TARGET_ORGANIZATION, target_team["id"], member_id, email, target_headers)
+                        team_member_display_name = remaining_team_member["user"].get("displayName", "Unknown")
 
-                        if email in [admin["identity"]["uniqueName"] for admin in team_admins]:
-                            set_team_admin(target_organization, target_project_id, target_team["id"], member_id, target_headers)
+                        matching_user = next((user for user in target_users if user.get("displayName") == team_member_display_name), None)
+
+                        if not matching_user:
+                            print(f"[WARNING] No matching user found in the target environment for '{team_member_display_name}'. Skipping...")
+                            continue
+
+                        target_user_id = matching_user["id"]
+
+                        add_user_to_team(target_organization, target_team["id"], target_user_id, team_member_display_name, target_headers)
+
+                        if team_member_display_name in [admin["identity"]["displayName"] for admin in team_admins]:
+                            set_team_admin(target_organization, target_project_id, target_team["id"], target_user_id, target_headers)
                     break
 
         except ValueError:

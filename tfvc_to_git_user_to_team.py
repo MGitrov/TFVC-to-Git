@@ -26,10 +26,10 @@ def get_project_id(organization, project_name, authentication_header):
     '''
     This function fetches the id of a project.
     '''
-    if "localhost" in organization: # Gets a project id from the on-premises.
+    if "localhost" in organization: # On-premises adjusted URL.
         url = f"{organization}/_apis/projects/{project_name}?api-version=6.0-preview"
 
-    else: # Gets a project id from the cloud.
+    else: # Cloud adjusted URL.
         url = f"https://dev.azure.com/{organization}/_apis/projects/{project_name}?api-version=6.0-preview"
 
     print("##############################")
@@ -60,10 +60,10 @@ def get_teams(organization, project_id, authentication_header):
     '''
     This function fetches the teams of a project.
     '''
-    if "localhost" in organization: # Gets a project id from the on-premises.
+    if "localhost" in organization: # On-premises adjusted URL.
         url = f"{organization}/_apis/projects/{project_id}/teams?api-version=6.0-preview"
 
-    else: # Gets a project id from the cloud.
+    else: # Cloud adjusted URL.
         url = f"https://dev.azure.com/{organization}/_apis/projects/{project_id}/teams?api-version=6.0-preview"
     
     print("##############################")
@@ -97,10 +97,10 @@ def get_team_members(organization, project_id, team_id, authentication_header):
     '''
     This function fetches the teams of a project.
     '''
-    if "localhost" in organization: # Gets a project id from the on-premises.
+    if "localhost" in organization: # On-premises adjusted URL.
         url = f"{organization}/_apis/projects/{project_id}/teams/{team_id}/members?api-version=6.0-preview"
 
-    else: # Gets a project id from the cloud.
+    else: # Cloud adjusted URL.
         url = f"https://dev.azure.com/{organization}/_apis/projects/{project_id}/teams/{team_id}/members?api-version=6.0-preview"
 
     print("##############################")
@@ -134,7 +134,7 @@ def get_team_members(organization, project_id, team_id, authentication_header):
 
 def get_all_users(organization, authentication_header):
     '''
-    This function fetches all users in an environment.
+    This function fetches all users from the target environment.
     '''
     url = f"https://vsaex.dev.azure.com/{organization}/_apis/userentitlements?api-version=6.0-preview"
 

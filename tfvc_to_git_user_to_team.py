@@ -5,11 +5,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-SOURCE_ORGANIZATION="source_organization_name" # Configure source organization here as the URLs in this script aren't using the whole organization URL as specified in the ".env" file.
+SOURCE_ORGANIZATION="source_organization" file.
 SOURCE_PROJECT=os.getenv("SOURCE_PROJECT")
 SOURCE_PAT = os.getenv("SOURCE_PAT")
 
-TARGET_ORGANIZATION="target_organization_name" # Configure target organization here as the URLs in this script aren't using the whole organization URL as specified in the ".env" file.
+TARGET_ORGANIZATION="target_organization" file.
 TARGET_PROJECT=os.getenv("TARGET_PROJECT")
 TARGET_PAT = os.getenv("TARGET_PAT")
 
@@ -79,7 +79,7 @@ def get_teams(organization, project_id, authentication_header):
             print(f"Found {len(teams)} teams:")
 
             for idx, team in enumerate(teams):
-                print(f"{idx + 1}. Team: {team["name"]} | id: {team["id"]}")
+                print(f"{idx + 1}. Team: {team['name']} | id: {team['id']}")
 
         else:
             print(f"[ERROR] Failed to fetch the teams of '{project_id}' project id.")
@@ -97,7 +97,11 @@ def get_team_members(organization, project_id, team_id, authentication_header):
     '''
     This function fetches the teams of a project.
     '''
-    url = f"https://dev.azure.com/{organization}/_apis/projects/{project_id}/teams/{team_id}/members?api-version=6.0-preview"
+    if "localhost" in organization: # Gets a project id from the on-premises.
+        url = f"{organization}/_apis/projects/{project_id}/teams/{team_id}/members?api-version=6.0-preview"
+
+    else: # Gets a project id from the cloud.
+        url = f"https://dev.azure.com/{organization}/_apis/projects/{project_id}/teams/{team_id}/members?api-version=6.0-preview"
 
     print("##############################")
     print(f"[INFO] Fetching the team members of team id '{team_id}' from project id '{project_id}'...")
@@ -114,7 +118,7 @@ def get_team_members(organization, project_id, team_id, authentication_header):
             for idx, team_member in enumerate(members):
                 is_admin = team_member.get("isTeamAdmin", False)
                 role = "Admin" if is_admin else "Member"
-                print(f"{idx + 1}. Team Member: {team_member["identity"]["uniqueName"]} | ID: {team_member["identity"]["id"]} | Role: {role}")
+                print(f"{idx + 1}. Team Member: {team_member['identity']['uniqueName']} | ID: {team_member['identity']['id']} | Role: {role}")
 
         else:
             print(f"[ERROR] Failed to fetch the team members of '{team_id}' team id.")
@@ -147,7 +151,7 @@ def get_all_users(organization, authentication_header):
 
             print(f"Found {len(users)} users:")
             for idx, user in enumerate(users):
-                print(f"{idx + 1}. {user["user"]["displayName"]} - {user["id"]}")
+                print(f"{idx + 1}. {user['user']['displayName']} - {user['id']}")
 
         else:
             print(f"[ERROR] Failed to fetch the users of the '{organization}' organization.")
@@ -232,24 +236,24 @@ def assign_users_to_team(source_organization, target_organization, source_projec
     target_teams = get_teams(target_organization, target_project_id, target_headers)
 
     for idx, source_team in enumerate(source_teams):
-        print(f"\nSource Team #{idx + 1}: {source_team["name"]}")
+        print(f"\nSource Team #{idx + 1}: {source_team['name']}")
 
         # Display target teams to choose from
         print("\nAvailable Target Teams:")
         for t_idx, target_team in enumerate(target_teams):
-            print(f"{t_idx + 1} - {target_team["name"]}")
+            print(f"{t_idx + 1} - {target_team['name']}")
 
         try:
             target_team_idx = int(input("\nSelect by number the target team to migrate members to: ")) - 1
             target_team = target_teams[target_team_idx]
 
-            print(f"\nMigrating members from '{source_team["name"]}' to '{target_team["name"]}'...")
+            print(f"\nMigrating members from '{source_team['name']}' to '{target_team['name']}'...")
 
             team_members = get_team_members(source_organization, source_project_id, source_team["id"], source_headers)
             team_admins = [member for member in team_members if member.get("isTeamAdmin", False)]  # Extracts team admins.
 
             if not team_members:
-                print(f"[ERROR] No team members has been found in source team '{source_team["name"]}'. Skipping...")
+                print(f"[ERROR] No team members has been found in source team '{source_team['name']}'. Skipping...")
                 continue
 
             for team_member in team_members:
@@ -265,7 +269,7 @@ def assign_users_to_team(source_organization, target_organization, source_projec
 
                 target_user_id = matching_user["id"]
 
-                accept = input(f"Do you want to add '{team_member_display_name}' to '{target_team["name"]}'? (Yes/No/All): ").strip().lower()
+                accept = input(f"Do you want to add '{team_member_display_name}' to '{target_team['name']}'? (Yes/No/All): ").strip().lower()
 
                 if accept == "yes":
                     add_user_to_team(target_organization, target_team["id"], target_user_id, team_member_display_name, target_headers)

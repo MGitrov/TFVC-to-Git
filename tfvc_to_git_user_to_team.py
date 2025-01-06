@@ -165,14 +165,14 @@ def get_all_users(organization, authentication_header):
 
     return users
 
-def add_user_to_team(organization, team_id, member_id, email, authentication_header):
+def add_user_to_team(organization, team_id, member_id, member_name, authentication_header):
     '''
     This function adds a user to a team.
     '''
     url = f"https://vsaex.dev.azure.com/{organization}/_apis/GroupEntitlements/{team_id}/members/{member_id}?api-version=6.0-preview"
     
     print("##############################")
-    print(f"[INFO] Adding user '{email}' to team '{team_id}' team...")
+    print(f"[INFO] Adding user '{member_name}' to team '{team_id}' team...")
     print(f"[DEBUG] API URL: {url}")
 
     try:
@@ -180,10 +180,10 @@ def add_user_to_team(organization, team_id, member_id, email, authentication_hea
         print(f"[DEBUG] Request's Status Code: {response.status_code}")
 
         if response.status_code in [200, 204]:
-            print(f"[INFO] Successfully added user {email} to team {team_id}.")
+            print(f"\033[1;32m[[INFO] Successfully added user {member_name} to team {team_id}.\033[0m")
 
         else:
-            print(f"[ERROR] Failed to add user {email}.")
+            print(f"[ERROR] Failed to add user {member_name}.")
             print(f"Request's Status Code: {response.status_code}")
             print(f"[DEBUG] Response Body: {response.text}")
 
@@ -207,7 +207,7 @@ def set_team_admin(organization, project_id, team_id, member_id, authentication_
         print(f"[INFO] Originally, user {member_id} was admin. Setting him up as an admin in the target team...")
 
         if response.status_code in [200, 204]:
-            print(f"[INFO] Successfully set user {member_id} as admin in team {team_id}.")
+            print(f"\033[1;32m[INFO] Successfully set user {member_id} as admin in team {team_id}.\033[0m")
 
         else:
             print(f"[ERROR] Failed to set user {member_id} as admin.")

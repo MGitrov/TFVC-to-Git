@@ -247,7 +247,7 @@ def assign_users_to_team(source_organization, target_organization, source_projec
 
         try:
             target_team_idx = int(input("\nSelect by number the target team to migrate members to: ")) - 1
-            #print(target_team_idx)
+
             if target_team_idx == 0-1:
                 print(f"Skipping '{source_team['name']}' team, moving to the next team...")
                 continue

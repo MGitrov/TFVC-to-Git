@@ -24,9 +24,9 @@ TARGET_AUTHENTICATION_HEADER = {
     "Authorization": f"Basic {base64.b64encode(f':{TARGET_PAT}'.encode()).decode()}"
 }
 
-def list_source_pipelines():
+def get_source_pipelines():
     """
-    This function lists the pipelines from the source project.
+    This function fetches the pipelines from the source project.
     """
     url = f"{SOURCE_ORGANIZATION}/{SOURCE_PROJECT}/_apis/pipelines?api-version=6.0-preview"
 
@@ -43,7 +43,7 @@ def list_source_pipelines():
             print(f"[INFO] There are {len(pipelines)} pipelines in '{SOURCE_ORGANIZATION}'.")
 
             for pipeline in pipelines:
-                print(f"- Pipeline ID: {pipeline["id"]} | Name: {pipeline["name"]}")
+                print(f"- Pipeline id: {pipeline['id']} | Name: {pipeline['name']}")
 
             return pipelines
         
@@ -63,8 +63,7 @@ def get_pipeline_config(pipeline_id):
     """
     url = f"{SOURCE_ORGANIZATION}/{SOURCE_PROJECT}/_apis/build/definitions/{pipeline_id}?api-version=6.0-preview"
 
-    print("##############################")
-    print(f"[INFO] Fetching the configuration of pipeline ID {pipeline_id} from '{SOURCE_PROJECT}'...")
+    print(f"[INFO] Fetching the configuration of pipeline id {pipeline_id} from '{SOURCE_PROJECT}'...")
     print(f"[DEBUG] API URL: {url}")
 
     try:
@@ -73,13 +72,13 @@ def get_pipeline_config(pipeline_id):
         
         if response.status_code == 200:
             pipeline_config = response.json()
-            print(f"[INFO] Successfully retrieved configuration for pipeline ID {pipeline_id}.")
-            print(f"[DEBUG] Raw Configuration:\n{json.dumps(pipeline_config, indent=4)}")  # Prettified JSON for better readability.
+            print(f"[INFO] Successfully retrieved configuration for pipeline id {pipeline_id}.")
+            print(f"\n[DEBUG] Raw Configuration:\n{json.dumps(pipeline_config, indent=4)}\n")  # Prettified JSON for better readability.
 
             return pipeline_config
         
         else:
-            print(f"[ERROR] Failed to fetch pipeline configuration for pipeline ID {pipeline_id}.")
+            print(f"[ERROR] Failed to fetch pipeline configuration for pipeline id {pipeline_id}.")
             print(f"Request's Status Code: {response.status_code}")
             print(f"[DEBUG] Response Body: {response.text}")
             return None
@@ -88,14 +87,14 @@ def get_pipeline_config(pipeline_id):
         print(f"[ERROR] An error occurred while fetching pipeline configuration: {e}")
         return None
 
-def fetch_pipeline_yaml(organization, project, pipeline_id, authentication_header):
+def get_pipeline_yaml(organization, project, pipeline_id, authentication_header):
     """
     This function fetches the YAML content of a pipeline.
     """
     url = f"{organization}/{project}/_apis/build/definitions/{pipeline_id}/yaml?api-version=6.0-preview"
 
     print("##############################")
-    print(f"[INFO] Fetching the configuration of pipeline ID {pipeline_id} from '{SOURCE_PROJECT}'...")
+    print(f"[INFO] Fetching the configuration of pipeline id {pipeline_id} from '{SOURCE_PROJECT}'...")
     print(f"[DEBUG] API URL: {url}")
 
     try:
@@ -109,7 +108,7 @@ def fetch_pipeline_yaml(organization, project, pipeline_id, authentication_heade
             return yaml.safe_load(pipeline_yaml) # Converts the YAML string into a Python dictionary for further manipulation.
         
         else:
-            print(f"[ERROR] Failed to fetch pipeline configuration for pipeline ID {pipeline_id}.")
+            print(f"[ERROR] Failed to fetch pipeline configuration for pipeline id {pipeline_id}.")
             print(f"Request's Status Code: {response.status_code}")
             print(f"[DEBUG] Response Body: {response.text}")
             return None
@@ -118,14 +117,13 @@ def fetch_pipeline_yaml(organization, project, pipeline_id, authentication_heade
         print(f"[ERROR] An error occurred while fetching pipeline configuration: {e}")
         return None
 
-def fetch_agent_pools(organization, authentication_header):
+def get_agent_pools(organization, authentication_header):
     """
     This function fetches the available agent pool(s) for an organization.
     """
     url = f"{organization}/_apis/distributedtask/pools?api-version=6.0-preview"
 
-    print("##############################")
-    print(f"[INFO] Fetching the available agent pool(s) for '{organization}'...")
+    print(f"\n[INFO] Fetching the available agent pool(s) for '{organization}'...")
     print(f"[DEBUG] API URL: {url}")
 
     response = requests.get(url, headers=authentication_header)
@@ -147,15 +145,16 @@ def choose_agent_pool(pools):
     """
     This function prompts the user to select an agent pool from the list.
     """
-    print("\n[INFO] Available Agent Pools:")
+    print("\n[INFO] Available Target Agent Pools:")
     for idx, pool in enumerate(pools):
-        print(f"{idx + 1} - {pool["name"]} (ID: {pool["id"]}, Hosted: {pool.get("isHosted", False)})")
+        print(f"{idx + 1} - {pool['name']} (id: {pool['id']}, Hosted: {pool.get('isHosted', False)})")
 
     while True:
         try:
             choice = int(input("\nEnter the number corresponding to your desired agent pool: ")) - 1
             if 0 <= choice < len(pools):
                 return pools[choice]
+            
             else:
                 print("[ERROR] Invalid choice. Please select a valid option.")
 
@@ -202,7 +201,7 @@ def convert_to_yaml(pipeline_config, pipeline_yaml_config, target_repository):
         yaml_format_pipeline["trigger"] = branch_filters or [target_repository["defaultBranch"].replace("refs/heads/", "")]
 
     # Configures the "pool" section based on the available agent pools.
-    pools = fetch_agent_pools(TARGET_ORGANIZATION, TARGET_AUTHENTICATION_HEADER)
+    pools = get_agent_pools(TARGET_ORGANIZATION, TARGET_AUTHENTICATION_HEADER)
     
     selected_pool = choose_agent_pool(pools)
     yaml_format_pipeline["pool"] = {"name": selected_pool["name"]}
@@ -320,16 +319,16 @@ def commit_yaml_to_target_repository(pipeline_name, yaml_pipeline_file, target_r
     print("##############################")
     print(f"[INFO] Committing YAML file '{yaml_file_name}' to repository '{repository_name}'...")
 
-    # Fetches the latest commit ID from the target repository.
+    # Fetches the latest commit id from the target repository.
     response = requests.get(url_commit, headers=TARGET_AUTHENTICATION_HEADER)
     print(f"[DEBUG] Request's Status Code: {response.status_code}")
 
     if response.status_code == 200:
-        latest_commit = response.json()["value"][0]["commitId"]
-        print(f"[INFO] Latest commit ID fetched: {latest_commit}")
+        latest_commit = response.json()['value'][0]['commitId']
+        print(f"[INFO] Latest commit id fetched: {latest_commit}")
 
     else:
-        raise Exception(f"[ERROR] Failed to fetch the latest commit ID | Request's Status Code: {response.status_code} | Response Body: {response.text}")
+        raise Exception(f"[ERROR] Failed to fetch the latest commit id | Request's Status Code: {response.status_code} | Response Body: {response.text}")
 
     # Validates the YAML file.
     yaml.safe_load(yaml_pipeline_file)
@@ -339,7 +338,7 @@ def commit_yaml_to_target_repository(pipeline_name, yaml_pipeline_file, target_r
         "refUpdates": [
             {
                 "name": f"refs/heads/{select_commit_branch(target_repository)}", # Specifies which branch the YAML file will be committed to.
-                "oldObjectId": latest_commit
+                "oldObjectid": latest_commit
             }
         ],
         "commits": [
@@ -360,13 +359,13 @@ def commit_yaml_to_target_repository(pipeline_name, yaml_pipeline_file, target_r
             }
         ]
     }
-    print("[DEBUG] Commit Payload:", json.dumps(payload, indent=4))
+    print("\n[DEBUG] Commit Payload:", json.dumps(payload, indent=4))
 
     response = requests.post(url_push, headers=TARGET_AUTHENTICATION_HEADER, json=payload)
-    print(f"[DEBUG] Request's Status Code: {response.status_code}")
+    print(f"\n[DEBUG] Request's Status Code: {response.status_code}")
 
     if response.status_code == 201:
-        print(f"[INFO] Successfully committed the YAML file to {target_repository["name"]}.")
+        print(f"[INFO] Successfully committed the YAML file to {target_repository['name']}.")
         return True
     
     else:
@@ -380,7 +379,7 @@ def adjust_pipeline_config(pipeline_config, target_repositories): # DEPRECATED.
     This function adjusts the pipeline configuration from a classic pipeline form (web editor) to YAML-based pipeline form.
     """
     print("##############################")
-    print(f"[INFO] Adjusting configuration for pipeline '{pipeline_config.get("name")}'...")
+    print(f"[INFO] Adjusting configuration for pipeline '{pipeline_config.get('name')}'...")
 
     repository_name = "migrationTargetProject"  # The target repository where the YAML pipeline will be stored.
 
@@ -415,7 +414,7 @@ def create_target_pipeline(pipeline_config): # DEPRECATED.
     url = f"{TARGET_ORGANIZATION}/{TARGET_PROJECT}/_apis/pipelines?api-version=7.0"
 
     print("##############################")
-    print(f"[INFO] Creating pipeline '{pipeline_config.get("name")}' in '{TARGET_PROJECT}'...")
+    print(f"[INFO] Creating pipeline '{pipeline_config.get('name')}' in '{TARGET_PROJECT}'...")
     print(f"[DEBUG] API URL: {url}")
     print(f"[DEBUG] Final Payload:\n{json.dumps(pipeline_config, indent=4)}")
 
@@ -425,11 +424,11 @@ def create_target_pipeline(pipeline_config): # DEPRECATED.
 
         if response.status_code == 201:
             created_pipeline = response.json()
-            print(f"[INFO] Successfully created pipeline: {created_pipeline.get("name")} with ID: {created_pipeline.get("id")}")
+            print(f"[INFO] Successfully created pipeline: {created_pipeline.get('name')} with id: {created_pipeline.get('id')}")
             return created_pipeline
         
         else:
-            print(f"[ERROR] Failed to create pipeline: {pipeline_config.get("name")}.")
+            print(f"[ERROR] Failed to create pipeline: {pipeline_config.get('name')}.")
             print(f"Request's Status Code: {response.status_code}")
             print(f"[DEBUG] Response Body: {response.text}")
             return None
@@ -442,21 +441,21 @@ def select_pipelines_to_migrate(pipelines):
     """
     This function prompts the user to select which pipelines to migrate.
     """
-    print("\nAvailable Pipelines for Migration:")
+    print("\nAvailable Source Pipelines for Migration:")
     for index, pipeline in enumerate(pipelines, 1):
-        print(f"{index} - {pipeline["name"]} (ID: {pipeline["id"]})")
+        print(f"{index} - {pipeline['name']} (id: {pipeline['id']})")
 
-    print("\nOptions:")
-    print("0 - Migrate all pipelines")
-    print("Enter pipeline numbers separated by commas to select specific pipelines.")
+    print("\nOr:")
+    print("0 - Migrate all pipelines (It is recommended to migrate the pipelines one by one for better controllability of the process)")
+    print("\nEnter pipeline numbers separated by commas to select specific pipelines.")
 
     selection = input("\nYour choice: ").strip()
 
-    # User chose to migrate all pipelines.
+    # Migrate all pipelines.
     if selection == "0":
         return [pipeline["id"] for pipeline in pipelines]
     
-    # User chose to migrate specific pipelines.
+    # Migrate specific pipelines.
     else:
         try:
             selected_indices = [int(x.strip()) - 1 for x in selection.split(",")]
@@ -476,7 +475,7 @@ def select_commit_branch(target_repository):
     """
     This function fetches branches from the target repository and prompts the user to select one.
     """
-    url = f"{TARGET_ORGANIZATION}/{TARGET_PROJECT}/_apis/git/repositories/{target_repository["id"]}/refs?filter=heads/&api-version=6.0"
+    url = f"{TARGET_ORGANIZATION}/{TARGET_PROJECT}/_apis/git/repositories/{target_repository['id']}/refs?filter=heads/&api-version=6.0"
     response = requests.get(url, headers=TARGET_AUTHENTICATION_HEADER)
 
     if response.status_code != 200:
@@ -485,11 +484,11 @@ def select_commit_branch(target_repository):
     branches = response.json()["value"]
     branch_names = [branch["name"].replace("refs/heads/", "") for branch in branches]
 
-    print(f"[INFO] Available branches in the target repository ({target_repository["name"]}):")
+    print(f"\n[INFO] Available Branches in the Target Repository ({target_repository['name']}):")
     for idx, branch_name in enumerate(branch_names, start=1):
         print(f"{idx} - {branch_name}")
 
-    user_choice = input("Select a branch by number: ").strip()
+    user_choice = input("\nSelect a branch by number: ").strip()
 
     if user_choice.isdigit():
         user_choice = int(user_choice)
@@ -504,7 +503,7 @@ def migrate_pipelines(source_organization, target_organization, source_project, 
     """
     This function migrates TFVC-based pipelines from a source project to a target project.
     """
-    print("##############################")
+    print("\n\033[1;33mEnsure you have configured agent pools in your target environment before starting the migration.\033[0m\n")
     print("[INFO] Starting pipeline migration process...")
     print(f"[DEBUG] Source Organization: {source_organization}")
     print(f"[DEBUG] Target Organization: {target_organization}")
@@ -524,7 +523,7 @@ def migrate_pipelines(source_organization, target_organization, source_project, 
 
     try:
         # Fetches pipelines from the source project.
-        pipelines = list_source_pipelines()
+        pipelines = get_source_pipelines()
 
     except Exception as e:
         print(f"[ERROR] Failed to fetch pipelines from the source project: {e}")
@@ -537,13 +536,13 @@ def migrate_pipelines(source_organization, target_organization, source_project, 
         for pipeline in pipelines:
             if pipeline["id"] in selected_pipeline_ids:
                 try:
-                    print(f"##############################>-{pipeline["name"]}-<##############################")
+                    print(f"##############################>-{pipeline['name']}-<##############################")
                     pipeline_id = pipeline["id"]
                     pipeline_name = pipeline["name"]
                     pipeline_config = get_pipeline_config(pipeline_id)
 
                     # Fetches the YAML format of the pipeline.
-                    yaml_content = fetch_pipeline_yaml(
+                    yaml_content = get_pipeline_yaml(
                         source_organization,
                         source_project,
                         pipeline_id,
@@ -551,15 +550,15 @@ def migrate_pipelines(source_organization, target_organization, source_project, 
                     )
 
                 except Exception as e:
-                    print(f"[ERROR] Failed to fetch or process pipeline '{pipeline["name"]}': {e}")
+                    print(f"[ERROR] Failed to fetch or process pipeline '{pipeline['name']}': {e}")
                     continue
 
                 try:
                     # Prompts the user to choose which repository to commit to.
-                    print("\nAvailable target repositories:")
+                    print("\n[INFO] Available Target Repositories:")
                     for idx, repository in enumerate(target_repositories, 1):
-                        print(f"{idx} - {repository["name"]} (ID: {repository["id"]})")
-                    repository_selection = input("\nEnter the number of the target repository (or press Enter for all): ").strip()
+                        print(f"{idx} - {repository['name']} (id: {repository['id']})")
+                    repository_selection = input("\nEnter the number of the target repository to commit the newly generated configuration file to (or press Enter for all): ").strip()
 
                     if repository_selection.isdigit():
                         repository_index = int(repository_selection) - 1
@@ -568,7 +567,7 @@ def migrate_pipelines(source_organization, target_organization, source_project, 
                         else:
                             print(f"[WARNING] Invalid repository selection. Proceeding with all repositories.")
 
-                    print(f"[DEBUG] Target repositories list:\n{json.dumps(target_repositories, indent=4)}")
+                    print(f"[DEBUG] Target repositories list:\n{json.dumps(target_repositories, indent=4)}\n")
 
                 except Exception as e:
                     print(f"[ERROR] Failed during repository selection: {e}")
@@ -582,16 +581,16 @@ def migrate_pipelines(source_organization, target_organization, source_project, 
                             success = commit_yaml_to_target_repository(pipeline_name, generated_yaml, repository)
 
                             if success:
-                                print(f"[SUCCESS] Pipeline '{pipeline_name}' migrated to repository '{repository["name"]}'.")
+                                print(f"\033[1;32m[SUCCESS] Pipeline '{pipeline_name}' migrated to repository '{repository['name']}'.\033[0m")
 
                             else:
-                                print(f"[ERROR] Failed to migrate pipeline '{pipeline_name}' to repository '{repository["name"]}'.")
+                                print(f"\033[1;31m[ERROR] Failed to migrate pipeline '{pipeline_name}' to repository '{repository['name']}'.\033[0m")
 
                         else:
-                            print(f"[ERROR] Invalid repository object: {repository}")
+                            print(f"\033[1;31m[ERROR] Invalid repository object: {repository}\033[0m")
 
                     except Exception as e:
-                        print(f"[ERROR] An error occurred while migrating pipeline '{pipeline_name}' to repository '{repository["name"]}': {e}")
+                        print(f"\033[1;31m[ERROR] An error occurred while migrating pipeline '{pipeline_name}' to repository '{repository['name']}': {e}\033[0m")
     else:
         print("[INFO] No pipelines found to migrate.")
 

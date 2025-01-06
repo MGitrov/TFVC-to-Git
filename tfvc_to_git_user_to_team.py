@@ -5,11 +5,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-SOURCE_ORGANIZATION="source_organization" file.
+SOURCE_ORGANIZATION="source_organization" # Configure source organization here as the URLs in this script aren't using the whole organization URL as specified in the ".env" file.
 SOURCE_PROJECT=os.getenv("SOURCE_PROJECT")
 SOURCE_PAT = os.getenv("SOURCE_PAT")
 
-TARGET_ORGANIZATION="target_organization" file.
+TARGET_ORGANIZATION="target_organization" # Configure target organization here as the URLs in this script aren't using the whole organization URL as specified in the ".env" file.
 TARGET_PROJECT=os.getenv("TARGET_PROJECT")
 TARGET_PAT = os.getenv("TARGET_PAT")
 
@@ -204,6 +204,7 @@ def set_team_admin(organization, project_id, team_id, member_id, authentication_
 
     try:
         response = requests.post(url, headers=authentication_header, json=payload)
+        print(f"[INFO] Originally, user {member_id} was admin. Setting him up as an admin in the target team...")
 
         if response.status_code in [200, 204]:
             print(f"[INFO] Successfully set user {member_id} as admin in team {team_id}.")
@@ -238,13 +239,19 @@ def assign_users_to_team(source_organization, target_organization, source_projec
     for idx, source_team in enumerate(source_teams):
         print(f"\nSource Team #{idx + 1}: {source_team['name']}")
 
-        # Display target teams to choose from
         print("\nAvailable Target Teams:")
         for t_idx, target_team in enumerate(target_teams):
             print(f"{t_idx + 1} - {target_team['name']}")
+        
+        print(f"0 - Skip migrating team members from '{source_team['name']}'")
 
         try:
             target_team_idx = int(input("\nSelect by number the target team to migrate members to: ")) - 1
+            #print(target_team_idx)
+            if target_team_idx == 0-1:
+                print(f"Skipping '{source_team['name']}' team, moving to the next team...")
+                continue
+
             target_team = target_teams[target_team_idx]
 
             print(f"\nMigrating members from '{source_team['name']}' to '{target_team['name']}'...")
@@ -260,7 +267,7 @@ def assign_users_to_team(source_organization, target_organization, source_projec
                 team_member_display_name = team_member["identity"].get("displayName", "Unknown")
 
 
-                # Checks whether the display name exists in the target environment users.
+                # Validates that the current source team member exists in the target environment users.
                 matching_user = next((user for user in target_users if user["user"]["displayName"] == team_member_display_name), None)
 
                 if not matching_user:
@@ -269,7 +276,7 @@ def assign_users_to_team(source_organization, target_organization, source_projec
 
                 target_user_id = matching_user["id"]
 
-                accept = input(f"Do you want to add '{team_member_display_name}' to '{target_team['name']}'? (Yes/No/All): ").strip().lower()
+                accept = input(f"\nDo you want to add '{team_member_display_name}' to '{target_team['name']}'? (Yes/No/All): ").strip().lower()
 
                 if accept == "yes":
                     add_user_to_team(target_organization, target_team["id"], target_user_id, team_member_display_name, target_headers)
@@ -279,9 +286,9 @@ def assign_users_to_team(source_organization, target_organization, source_projec
 
                 elif accept == "all":
                     for remaining_team_member in team_members:
-                        team_member_display_name = remaining_team_member["user"].get("displayName", "Unknown")
+                        team_member_display_name = remaining_team_member["identity"].get("displayName", "Unknown")
 
-                        matching_user = next((user for user in target_users if user.get("displayName") == team_member_display_name), None)
+                        matching_user = next((user for user in target_users if user["user"]["displayName"] == team_member_display_name), None)
 
                         if not matching_user:
                             print(f"[WARNING] No matching user found in the target environment for '{team_member_display_name}'. Skipping...")

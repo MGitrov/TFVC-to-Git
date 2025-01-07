@@ -118,6 +118,42 @@ def get_pipeline_yaml(organization, project, pipeline_id, authentication_header)
         print(f"[ERROR] An error occurred while fetching pipeline configuration: {e}")
         return None
 
+def extract_branches_from_pipeline_yaml(exported_yaml_config):
+    """
+    This function extracts branch names from the 'trigger' section of the exported YAML file.
+    """
+    print("##############################")
+    print("[INFO] Starting branch extraction from pipeline YAML configuration...")
+
+    branches = []
+
+    if "trigger" in exported_yaml_config and "paths" in exported_yaml_config["trigger"]:
+        print("[INFO] Found 'trigger' section with 'paths'. Processing paths...")
+
+        paths = (
+            exported_yaml_config["trigger"]["paths"].get("include", []) +
+            exported_yaml_config["trigger"]["paths"].get("exclude", [])
+        )
+        print(f"[DEBUG] Paths to process: {paths}")
+
+        for path in paths:
+            branch_match = re.match(r"^\$/[^/]+/([^/]+)/", path)
+
+            if branch_match:
+                branch_name = branch_match.group(1)
+                branches.append(branch_name)
+
+            else:
+                print(f"[WARNING] No branch match found for path: {path}")
+
+    else:
+        print("[WARNING] 'trigger' section or 'paths' not found in pipeline YAML configuration.")
+
+    unique_branches = list(set(branches))
+    print(f"[INFO] Extracted unique branches: {unique_branches}")
+
+    return unique_branches
+
 def get_agent_pools(organization, authentication_header):
     """
     This function fetches the available agent pool(s) for an organization.
@@ -187,7 +223,7 @@ def convert_to_yaml(pipeline_config, pipeline_yaml_config, target_repository):
         exported_trigger = pipeline_yaml_config["trigger"]
 
         # Initializes the Git-compatible trigger structure.
-        git_trigger = {"branches": {"include": []}, "paths": {"include": [], "exclude": []}}
+        git_trigger = {"branches": {"include": extract_branches_from_pipeline_yaml(pipeline_yaml_config)}, "paths": {"include": [], "exclude": []}}
 
         extracted_branch = None
         branches_set = set()
@@ -195,26 +231,14 @@ def convert_to_yaml(pipeline_config, pipeline_yaml_config, target_repository):
         # Adjusts paths to a Git-compatible format.
         if "paths" in exported_trigger:
             for path in exported_trigger["paths"].get("include", []):
-                branch_match = re.match(r"^\$/[^/]+/([^/]+)/", path) # Extracts branches names.
-
-                if branch_match:
-                    branches_set.add(branch_match.group(1))
-
                 adjusted_path = re.sub(r"^\$\S+?/", "", path)  # Removes the '$/...' part.
                 adjusted_path = re.sub(r"^[^/]+?/", "", adjusted_path)  # Removes the '/.../' part.
                 git_trigger["paths"]["include"].append(adjusted_path)
 
             for path in exported_trigger["paths"].get("exclude", []):
-                branch_match = re.match(r"^\$/[^/]+/([^/]+)/", path) # Extracts branches names.
-
-                if branch_match:
-                    branches_set.add(branch_match.group(1))
-
                 adjusted_path = re.sub(r"^\$\S+?/", "", path)  # Removes the '$/...' part.
                 adjusted_path = re.sub(r"^[^/]+?/", "", adjusted_path)  # Removes the '/.../' part.
                 git_trigger["paths"]["exclude"].append(adjusted_path)
-
-        git_trigger["branches"]["include"] = list(branches_set)
 
         # Ensure the branch where the YAML file is committed is included
         git_trigger["branches"]["include"].append(target_repository["defaultBranch"].replace("refs/heads/", ""))
@@ -349,7 +373,7 @@ def convert_to_yaml(pipeline_config, pipeline_yaml_config, target_repository):
 
     return yaml_string
 
-def commit_yaml_to_target_repository(pipeline_name, yaml_pipeline_file, target_repository):
+def commit_yaml_to_target_repository(pipeline_name, yaml_pipeline_file, target_repository, exported_yaml_config):
     """
     This function commits the generated YAML file to the target repository.
     """
@@ -373,6 +397,8 @@ def commit_yaml_to_target_repository(pipeline_name, yaml_pipeline_file, target_r
     else:
         raise Exception(f"[ERROR] Failed to fetch the latest commit id | Request's Status Code: {response.status_code} | Response Body: {response.text}")
 
+    extracted_branches = extract_branches_from_pipeline_yaml(exported_yaml_config)
+
     # Validates the YAML file.
     yaml.safe_load(yaml_pipeline_file)
 
@@ -380,7 +406,7 @@ def commit_yaml_to_target_repository(pipeline_name, yaml_pipeline_file, target_r
     payload = {
         "refUpdates": [
             {
-                "name": f"refs/heads/{select_commit_branch(target_repository)}", # Specifies which branch the YAML file will be committed to.
+                "name": f"refs/heads/{select_commit_branch(target_repository, extracted_branches)}", # Specifies which branch the YAML file will be committed to.
                 "oldObjectid": latest_commit
             }
         ],
@@ -514,7 +540,7 @@ def select_pipelines_to_migrate(pipelines):
             print(f"[ERROR] Invalid selection: {e}")
             return select_pipelines_to_migrate(pipelines) # On invaild choice, the user will be prompted again.
 
-def select_commit_branch(target_repository):
+def select_commit_branch(target_repository, yaml_branches):
     """
     This function fetches branches from the target repository and prompts the user to select one.
     """
@@ -527,10 +553,21 @@ def select_commit_branch(target_repository):
     branches = response.json()["value"]
     branch_names = [branch["name"].replace("refs/heads/", "") for branch in branches]
 
+    # Validates that the 'trigger' branches are exist in the target repository.
+    if yaml_branches:
+        print("\n[INFO] Validating branches from the exported YAML file...")
+
+        missing_branches = [branch for branch in yaml_branches if branch not in branch_names]
+
+        if missing_branches:
+            print(f"\033[1;33m[WARNING] The following branches from the YAML file do not exist in the target repository: {missing_branches}\033[0m")
+        else:
+            print("[INFO] All branches from the YAML file exist in the target repository.")
+
     print(f"\n[INFO] Available Branches in the Target Repository ({target_repository['name']}):")
     for idx, branch_name in enumerate(branch_names, start=1):
         print(f"{idx} - {branch_name}")
-
+        
     user_choice = input("\nSelect a branch by number: ").strip()
 
     if user_choice.isdigit():
@@ -546,7 +583,8 @@ def migrate_pipelines(source_organization, target_organization, source_project, 
     """
     This function migrates TFVC-based pipelines from a source project to a target project.
     """
-    print("\n\033[1;33mEnsure you have configured agent pools in your target environment before starting the migration.\033[0m\n")
+    print("\n\033[1;33mEnsure the trigger branches are exist in your target environment before starting the migration.\033[0m")
+    print("\033[1;33mEnsure you have configured agent pools in your target environment before starting the migration.\033[0m\n")
     print("[INFO] Starting pipeline migration process...")
     print(f"[DEBUG] Source Organization: {source_organization}")
     print(f"[DEBUG] Target Organization: {target_organization}")
@@ -621,7 +659,7 @@ def migrate_pipelines(source_organization, target_organization, source_project, 
                     try:
                         if isinstance(repository, dict):  # Ensures repository is a dictionary
                             generated_yaml = convert_to_yaml(pipeline_config, yaml_content, repository)
-                            success = commit_yaml_to_target_repository(pipeline_name, generated_yaml, repository)
+                            success = commit_yaml_to_target_repository(pipeline_name, generated_yaml, repository, yaml_content)
 
                             if success:
                                 print(f"\033[1;32m[SUCCESS] Pipeline '{pipeline_name}' migrated to repository '{repository['name']}'.\033[0m")

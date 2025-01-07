@@ -3,6 +3,7 @@ import base64
 import requests
 import json
 import yaml
+import re
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -181,7 +182,41 @@ def convert_to_yaml(pipeline_config, pipeline_yaml_config, target_repository):
     }
 
     # Configures the "trigger" section based on the pipeline configuration.
-    if "options" in pipeline_config:
+    # Uses the 'trigger' section from the exported YAML file.
+    if "trigger" in pipeline_yaml_config:
+        exported_trigger = pipeline_yaml_config["trigger"]
+
+        # Initializes the Git-compatible trigger structure.
+        git_trigger = {"branches": {"include": []}, "paths": {"include": [], "exclude": []}}
+
+        extracted_branch = None
+
+        # Adjusts paths to a Git-compatible format.
+        if "paths" in exported_trigger:
+            for path in exported_trigger["paths"].get("include", []):
+                branch_match = re.match(r"^\$/[^/]+/([^/]+)/", path) # Extracts branch name.
+
+                if branch_match:
+                    extracted_branch = branch_match.group(1)
+
+                adjusted_path = re.sub(r"^\$\S+?/", "", path)  # Removes the '$/...' part.
+                adjusted_path = re.sub(r"^[^/]+?/", "", adjusted_path)  # Removes the '/.../' part.
+                git_trigger["paths"]["include"].append(adjusted_path)
+
+            for path in exported_trigger["paths"].get("exclude", []):
+                adjusted_path = re.sub(r"^\$\S+?/", "", path)  # Removes the '$/...' part.
+                adjusted_path = re.sub(r"^[^/]+?/", "", adjusted_path)  # Removes the '/.../' part.
+                git_trigger["paths"]["exclude"].append(adjusted_path)
+
+        if extracted_branch:
+            git_trigger["branches"]["include"].append(extracted_branch)
+                
+        # Ensure the branch where the YAML file is committed is included
+        git_trigger["branches"]["include"].append(target_repository["defaultBranch"].replace("refs/heads/", ""))
+
+        yaml_format_pipeline["trigger"] = git_trigger
+
+    elif "options" in pipeline_config:
         branch_filters = []
 
         for option in pipeline_config["options"]:

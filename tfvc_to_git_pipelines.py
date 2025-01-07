@@ -190,29 +190,37 @@ def convert_to_yaml(pipeline_config, pipeline_yaml_config, target_repository):
         git_trigger = {"branches": {"include": []}, "paths": {"include": [], "exclude": []}}
 
         extracted_branch = None
+        branches_set = set()
 
         # Adjusts paths to a Git-compatible format.
         if "paths" in exported_trigger:
             for path in exported_trigger["paths"].get("include", []):
-                branch_match = re.match(r"^\$/[^/]+/([^/]+)/", path) # Extracts branch name.
+                branch_match = re.match(r"^\$/[^/]+/([^/]+)/", path) # Extracts branches names.
 
                 if branch_match:
-                    extracted_branch = branch_match.group(1)
+                    branches_set.add(branch_match.group(1))
 
                 adjusted_path = re.sub(r"^\$\S+?/", "", path)  # Removes the '$/...' part.
                 adjusted_path = re.sub(r"^[^/]+?/", "", adjusted_path)  # Removes the '/.../' part.
                 git_trigger["paths"]["include"].append(adjusted_path)
 
             for path in exported_trigger["paths"].get("exclude", []):
+                branch_match = re.match(r"^\$/[^/]+/([^/]+)/", path) # Extracts branches names.
+
+                if branch_match:
+                    branches_set.add(branch_match.group(1))
+
                 adjusted_path = re.sub(r"^\$\S+?/", "", path)  # Removes the '$/...' part.
                 adjusted_path = re.sub(r"^[^/]+?/", "", adjusted_path)  # Removes the '/.../' part.
                 git_trigger["paths"]["exclude"].append(adjusted_path)
 
-        if extracted_branch:
-            git_trigger["branches"]["include"].append(extracted_branch)
-                
+        git_trigger["branches"]["include"] = list(branches_set)
+
         # Ensure the branch where the YAML file is committed is included
         git_trigger["branches"]["include"].append(target_repository["defaultBranch"].replace("refs/heads/", ""))
+
+        # Remove duplicates (if any)
+        git_trigger["branches"]["include"] = list(set(git_trigger["branches"]["include"]))
 
         yaml_format_pipeline["trigger"] = git_trigger
 

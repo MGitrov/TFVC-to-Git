@@ -198,7 +198,7 @@ def choose_agent_pool(pools):
         except ValueError:
             print("[ERROR] Invalid input. Please enter a number.")
 
-def convert_to_yaml(pipeline_config, pipeline_yaml_config, target_repository):
+def convert_to_yaml(pipeline_config, pipeline_yaml_config, target_repository, selected_target_branch):
     """
     This function converts a classic Azure DevOps pipeline configuration into a YAML string format compatible with YAML-based pipelines.
     """
@@ -240,10 +240,10 @@ def convert_to_yaml(pipeline_config, pipeline_yaml_config, target_repository):
                 adjusted_path = re.sub(r"^[^/]+?/", "", adjusted_path)  # Removes the '/.../' part.
                 git_trigger["paths"]["exclude"].append(adjusted_path)
 
-        # Ensure the branch where the YAML file is committed is included
-        git_trigger["branches"]["include"].append(target_repository["defaultBranch"].replace("refs/heads/", ""))
+        # Ensures the branch where the YAML file will be committed to is included.
+        git_trigger["branches"]["include"].append(selected_target_branch)
 
-        # Remove duplicates (if any)
+        # Removes duplicates (if any).
         git_trigger["branches"]["include"] = list(set(git_trigger["branches"]["include"]))
 
         yaml_format_pipeline["trigger"] = git_trigger
@@ -373,7 +373,7 @@ def convert_to_yaml(pipeline_config, pipeline_yaml_config, target_repository):
 
     return yaml_string
 
-def commit_yaml_to_target_repository(pipeline_name, yaml_pipeline_file, target_repository, exported_yaml_config):
+def commit_yaml_to_target_repository(pipeline_name, yaml_pipeline_file, target_repository, selected_target_branch):
     """
     This function commits the generated YAML file to the target repository.
     """
@@ -397,7 +397,7 @@ def commit_yaml_to_target_repository(pipeline_name, yaml_pipeline_file, target_r
     else:
         raise Exception(f"[ERROR] Failed to fetch the latest commit id | Request's Status Code: {response.status_code} | Response Body: {response.text}")
 
-    extracted_branches = extract_branches_from_pipeline_yaml(exported_yaml_config)
+    #extracted_branches = extract_branches_from_pipeline_yaml(exported_yaml_config)
 
     # Validates the YAML file.
     yaml.safe_load(yaml_pipeline_file)
@@ -406,7 +406,7 @@ def commit_yaml_to_target_repository(pipeline_name, yaml_pipeline_file, target_r
     payload = {
         "refUpdates": [
             {
-                "name": f"refs/heads/{select_commit_branch(target_repository, extracted_branches)}", # Specifies which branch the YAML file will be committed to.
+                "name": f"refs/heads/{selected_target_branch}", # Specifies which branch the YAML file will be committed to.
                 "oldObjectid": latest_commit
             }
         ],
@@ -476,7 +476,6 @@ def adjust_pipeline_config(pipeline_config, target_repositories): # DEPRECATED.
     }
 
 def create_target_pipeline(pipeline_config): # DEPRECATED.
-
     """
     This functionCreates a new pipeline in the target Azure DevOps project.
     """
@@ -656,10 +655,13 @@ def migrate_pipelines(source_organization, target_organization, source_project, 
 
                 # Migrates the pipeline(s) to the selected repositories.
                 for repository in target_repositories:
+                    yaml_branches = extract_branches_from_pipeline_yaml(yaml_content)
+                    selected_target_branch = select_commit_branch(repository, yaml_branches)
+                    
                     try:
                         if isinstance(repository, dict):  # Ensures repository is a dictionary
-                            generated_yaml = convert_to_yaml(pipeline_config, yaml_content, repository)
-                            success = commit_yaml_to_target_repository(pipeline_name, generated_yaml, repository, yaml_content)
+                            generated_yaml = convert_to_yaml(pipeline_config, yaml_content, repository, selected_target_branch)
+                            success = commit_yaml_to_target_repository(pipeline_name, generated_yaml, repository, selected_target_branch)
 
                             if success:
                                 print(f"\033[1;32m[SUCCESS] Pipeline '{pipeline_name}' migrated to repository '{repository['name']}'.\033[0m")

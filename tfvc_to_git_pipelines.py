@@ -3,6 +3,7 @@ import base64
 import requests
 import json
 import yaml
+import re
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -161,6 +162,25 @@ def choose_agent_pool(pools):
         except ValueError:
             print("[ERROR] Invalid input. Please enter a number.")
 
+def extract_branches_from_trigger(yaml_content):
+    """
+    This function extracts the branches from the 'trigger' section within the YAML configuration file, and adjustes them to be
+    in a Git-compatible format.
+    """
+    branches = []
+
+    if "trigger" in yaml_content:
+        trigger_section = yaml_content["trigger"]
+
+        if "paths" in trigger_section:
+            for path in trigger_section["paths"].get("include", []):
+                branch_match = re.match(r"\$/[^/]+/([^/]+)", path)
+
+                if branch_match:
+                    branches.append(branch_match.group(1))
+
+    return list(set(branches)) # Uses 'set' to avoid duplications.
+
 def convert_to_yaml(pipeline_config, pipeline_yaml_config, target_repository):
     """
     This function converts a classic Azure DevOps pipeline configuration into a YAML string format compatible with YAML-based pipelines.
@@ -181,7 +201,29 @@ def convert_to_yaml(pipeline_config, pipeline_yaml_config, target_repository):
     }
 
     # Configures the "trigger" section based on the pipeline configuration.
-    if "options" in pipeline_config:
+    extracted_branches = extract_branches_from_trigger(pipeline_yaml_config)
+
+    if "trigger" in pipeline_yaml_config:
+        exported_trigger = pipeline_yaml_config["trigger"]
+
+        # Initializes a Git-compatible 'trigger' structure.
+        git_trigger = {"branches": {"include": extracted_branches}, "paths": {"include": [], "exclude": []}}
+
+        # Adjusts the paths to a Git-compatible format.
+        if "paths" in exported_trigger:
+            for path in exported_trigger["paths"].get("include", []):
+                adjusted_path = re.sub(r"^\$\S+?/", "", path)  # Removes the '$/...' part.
+                adjusted_path = re.sub(r"^[^/]+?/", "", adjusted_path)  # Removes the '/.../' part.
+                git_trigger["paths"]["include"].append(adjusted_path)
+
+            for path in exported_trigger["paths"].get("exclude", []):
+                adjusted_path = re.sub(r"^\$\S+?/", "", path)  # Removes the '$/...' part.
+                adjusted_path = re.sub(r"^[^/]+?/", "", adjusted_path)  # Removes the '/.../' part.
+                git_trigger["paths"]["exclude"].append(adjusted_path)
+
+        yaml_format_pipeline["trigger"] = git_trigger
+
+    elif "options" in pipeline_config:
         branch_filters = []
 
         for option in pipeline_config["options"]:
@@ -199,6 +241,10 @@ def convert_to_yaml(pipeline_config, pipeline_yaml_config, target_repository):
                         continue
 
         yaml_format_pipeline["trigger"] = branch_filters or [target_repository["defaultBranch"].replace("refs/heads/", "")]
+
+    else:
+        print("[WARNING] No trigger information found in either configuration.")
+        yaml_format_pipeline["trigger"] = [target_repository["defaultBranch"].replace("refs/heads/", "")]
 
     # Configures the "pool" section based on the available agent pools.
     pools = get_agent_pools(TARGET_ORGANIZATION, TARGET_AUTHENTICATION_HEADER)
@@ -256,9 +302,6 @@ def convert_to_yaml(pipeline_config, pipeline_yaml_config, target_repository):
         
     else:
         print("[WARNING] No variables found in either configuration.")
-    
-    #yaml_format_pipeline["variables"] = formatted_variables
-
 
     for phase in pipeline_config["process"]["phases"]: # Extracts all phases in the classic pipeline's process configuration.
         for step in phase["steps"]: # Extracts all steps within the current phase.
@@ -306,11 +349,8 @@ def convert_to_yaml(pipeline_config, pipeline_yaml_config, target_repository):
 
     return yaml_string
 
-def commit_yaml_to_target_repository(pipeline_name, yaml_pipeline_file, target_repository):
-    """
-    This function commits the generated YAML file to the target repository.
-    """
-    repository_id = target_repository["id"] # Used to identify the target repository in Azure DevOps' API.
+def commit_yaml_to_target_repository(pipeline_name, pipeline_config, yaml_pipeline_file, target_repository, extracted_branch=None):
+    repository_id = target_repository["id"]
     repository_name = target_repository["name"]
     yaml_file_name = f"azure-pipelines-{pipeline_name}.yml"
     url_commit = f"{TARGET_ORGANIZATION}/{TARGET_PROJECT}/_apis/git/repositories/{repository_id}/commits?api-version=6.0-preview"
@@ -319,25 +359,53 @@ def commit_yaml_to_target_repository(pipeline_name, yaml_pipeline_file, target_r
     print("##############################")
     print(f"[INFO] Committing YAML file '{yaml_file_name}' to repository '{repository_name}'...")
 
-    # Fetches the latest commit id from the target repository.
+    # Fetches the latest commit id
     response = requests.get(url_commit, headers=TARGET_AUTHENTICATION_HEADER)
     print(f"[DEBUG] Request's Status Code: {response.status_code}")
 
     if response.status_code == 200:
         latest_commit = response.json()['value'][0]['commitId']
         print(f"[INFO] Latest commit id fetched: {latest_commit}")
-
     else:
-        raise Exception(f"[ERROR] Failed to fetch the latest commit id | Request's Status Code: {response.status_code} | Response Body: {response.text}")
+        raise Exception(f"[ERROR] Failed to fetch the latest commit id | Response Body: {response.text}")
 
-    # Validates the YAML file.
-    yaml.safe_load(yaml_pipeline_file)
+    # Validate and parse YAML pipeline file
+    if isinstance(yaml_pipeline_file, str):
+        yaml_pipeline_data = yaml.safe_load(yaml_pipeline_file)
+    else:
+        yaml_pipeline_data = yaml_pipeline_file
 
-    # Commit payload.
+    # Extract branches
+    extracted_branches = extract_branches_from_trigger(yaml_pipeline_data)
+
+    # Fetch available branches
+    url_get_branches = f"{TARGET_ORGANIZATION}/{TARGET_PROJECT}/_apis/git/repositories/{repository_id}/refs?filter=heads/&api-version=6.0"
+    response = requests.get(url_get_branches, headers=TARGET_AUTHENTICATION_HEADER)
+    if response.status_code != 200:
+        raise Exception(f"[ERROR] Failed to fetch branches | Response Body: {response.text}")
+
+    branches = response.json()["value"]
+    branch_names = [branch["name"].replace("refs/heads/", "") for branch in branches]
+
+    # Check for missing branches
+    missing_branches = [branch for branch in extracted_branches if branch not in branch_names]
+    if missing_branches:
+        print(f"\033[1;33m[WARNING] The following branches do not exist: {', '.join(missing_branches)}.\033[0m")
+
+    # Select branch to commit
+    commit_branch = select_commit_branch(target_repository, extracted_branches)
+
+    # Adjust trigger section
+    yaml_pipeline_data.setdefault("trigger", {}).setdefault("branches", {}).setdefault("include", []).append(commit_branch)
+
+    # Serialize updated YAML data back to string
+    yaml_pipeline_file = yaml.dump(yaml_pipeline_data, sort_keys=False)
+
+    # Commit payload
     payload = {
         "refUpdates": [
             {
-                "name": f"refs/heads/{select_commit_branch(target_repository)}", # Specifies which branch the YAML file will be committed to.
+                "name": f"refs/heads/{commit_branch}",
                 "oldObjectid": latest_commit
             }
         ],
@@ -359,19 +427,16 @@ def commit_yaml_to_target_repository(pipeline_name, yaml_pipeline_file, target_r
             }
         ]
     }
-    print("\n[DEBUG] Commit Payload:", json.dumps(payload, indent=4))
 
+    print("\n[DEBUG] Commit Payload:", json.dumps(payload, indent=4))
     response = requests.post(url_push, headers=TARGET_AUTHENTICATION_HEADER, json=payload)
-    print(f"\n[DEBUG] Request's Status Code: {response.status_code}")
+    print(f"[DEBUG] Request's Status Code: {response.status_code}")
 
     if response.status_code == 201:
-        print(f"[INFO] Successfully committed the YAML file to {target_repository['name']}.")
+        print(f"[INFO] Successfully committed the YAML file to {repository_name} on branch '{commit_branch}'.")
         return True
-    
     else:
-        print(f"[ERROR] Failed to commit the YAML file.")
-        print(f"Request's Status Code: {response.status_code}")
-        print(f"[DEBUG] Response Body: {response.text}")
+        print(f"[ERROR] Failed to commit the YAML file. Response: {response.text}")
         return False
 
 def adjust_pipeline_config(pipeline_config, target_repositories): # DEPRECATED.
@@ -471,10 +536,13 @@ def select_pipelines_to_migrate(pipelines):
             print(f"[ERROR] Invalid selection: {e}")
             return select_pipelines_to_migrate(pipelines) # On invaild choice, the user will be prompted again.
 
-def select_commit_branch(target_repository):
+def select_commit_branch(target_repository, extracted_branch=None):
     """
-    This function fetches branches from the target repository and prompts the user to select one.
+    This function fetches branches from the target repository and determines the appropriate branch for committing.
+    If `extracted_branch` is provided, it checks if the branch exists in the target repository.
+    If the branch doesn't exist or is not provided, the user is prompted to select one.
     """
+    # Fetch branches from the target repository
     url = f"{TARGET_ORGANIZATION}/{TARGET_PROJECT}/_apis/git/repositories/{target_repository['id']}/refs?filter=heads/&api-version=6.0"
     response = requests.get(url, headers=TARGET_AUTHENTICATION_HEADER)
 
@@ -484,20 +552,34 @@ def select_commit_branch(target_repository):
     branches = response.json()["value"]
     branch_names = [branch["name"].replace("refs/heads/", "") for branch in branches]
 
+    # Check if the extracted branch exists
+    if extracted_branch:
+        if extracted_branch in branch_names:
+            print(f"[INFO] The extracted branch '{extracted_branch}' exists in the target repository.")
+            print(f"[INFO] The generated YAML file will be committed to the '{extracted_branch}' branch.")
+            return extracted_branch
+        else:
+            print(f"[WARNING] The extracted branch '{extracted_branch}' does not exist in the target repository.")
+            print("[INFO] You need to select an alternative branch.")
+
+    # Prompt user to select a branch
     print(f"\n[INFO] Available Branches in the Target Repository ({target_repository['name']}):")
     for idx, branch_name in enumerate(branch_names, start=1):
         print(f"{idx} - {branch_name}")
 
-    user_choice = input("\nSelect a branch by number: ").strip()
+    while True:
+        user_choice = input("\nSelect a branch by number: ").strip()
 
-    if user_choice.isdigit():
-        user_choice = int(user_choice)
-        if 1 <= user_choice <= len(branch_names):
-            return branch_names[user_choice - 1]
+        if user_choice.isdigit():
+            user_choice = int(user_choice)
+            if 1 <= user_choice <= len(branch_names):
+                selected_branch = branch_names[user_choice - 1]
+                print(f"[INFO] The YAML file will be committed to the '{selected_branch}' branch.")
+                return selected_branch
+            else:
+                print("[ERROR] Invalid branch selection. Please select a valid number from the list.")
         else:
-            raise ValueError("[ERROR] Invalid branch selection.")
-    else:
-        raise ValueError("[ERROR] Please select a valid number from the list.")
+            print("[ERROR] Please select a valid number from the list.")
 
 def migrate_pipelines(source_organization, target_organization, source_project, target_project, source_headers, target_headers):
     """
@@ -549,6 +631,9 @@ def migrate_pipelines(source_organization, target_organization, source_project, 
                         source_headers
                     )
 
+                    extracted_branch = extract_branches_from_trigger(yaml_content)
+                    print(f"[INFO] Extracted branch for triggering: '{extracted_branch}'")
+
                 except Exception as e:
                     print(f"[ERROR] Failed to fetch or process pipeline '{pipeline['name']}': {e}")
                     continue
@@ -577,11 +662,29 @@ def migrate_pipelines(source_organization, target_organization, source_project, 
                 for repository in target_repositories:
                     try:
                         if isinstance(repository, dict):  # Ensures repository is a dictionary
+                            # Validate the extracted branch in the target repository
+                            try:
+                                selected_branch = select_commit_branch(repository, extracted_branch=extracted_branch)
+                                
+                            except Exception as branch_error:
+                                print(f"[WARNING] {branch_error}")
+                                print("\n[INFO] Prompting user to choose a branch.")
+                                selected_branch = select_commit_branch(repository)
+
+                            # Convert the pipeline configuration to YAML
                             generated_yaml = convert_to_yaml(pipeline_config, yaml_content, repository)
-                            success = commit_yaml_to_target_repository(pipeline_name, generated_yaml, repository)
+                            
+                            # Commit the YAML file to the selected branch
+                            success = commit_yaml_to_target_repository(
+                                pipeline_name,
+                                pipeline_config,
+                                generated_yaml,
+                                repository,
+                                extracted_branch=selected_branch
+                            )
 
                             if success:
-                                print(f"\033[1;32m[SUCCESS] Pipeline '{pipeline_name}' migrated to repository '{repository['name']}'.\033[0m")
+                                print(f"\033[1;32m[SUCCESS] Pipeline '{pipeline_name}' migrated to repository '{repository['name']}' on branch '{selected_branch}'.\033[0m")
 
                             else:
                                 print(f"\033[1;31m[ERROR] Failed to migrate pipeline '{pipeline_name}' to repository '{repository['name']}'.\033[0m")

@@ -7,21 +7,21 @@
   - [Processes Migration](#four-processes-migration)
 
 # Introduction
-TFVC to Git migration guide repository.
+A migration guide from a TFVC-based project to a Git-based project.
 
 # Prerequisites
 ### **:one: [git-tfs](https://github.com/git-tfs/git-tfs) (and its related prerequisites)**
   git-tfs will be used to migrate the code from a TFVC-based repository to Git while preserving the changesets (version history).
   * **Installation:** [Instructions](https://github.com/git-tfs/git-tfs?tab=readme-ov-file#get-git-tfs).
-  * **PAT (Personal Access Token):** Ensure you have generated a PAT with ```Code (Read)``` access for your user.
+  * **PAT (Personal Access Token):** Ensure you have generated a PAT with ```Code (Read)``` (at least) access for your user.
 
 ### **:two: [Azure DevOps Migration Tools](https://github.com/nkdAgility/azure-devops-migration-tools) (and its related prerequisites)**
-  Azure DevOps Migration Tools will be used to migrate the work items and their related information.
+  Azure DevOps Migration Tools will be used to migrate work items and their related information (boards, backlogs, and sprints), shared queries, iteration and area paths, and project's teams.
   * **Installation:** [Instructions](https://nkdagility.com/learn/azure-devops-migration-tools/setup/installation/).
   * **Permissions:** [Instructions](https://nkdagility.com/learn/azure-devops-migration-tools/setup/permissions/).
 
 ### **:three: Users Synchronization**
-  All the users relevant for migration should be migrated to the relevant Azure DevOps organization(s), along with their permissions.
+  All the users relevant for migration should be migrated to the relevant target Azure DevOps organization(s), along with their permissions.
 
 # Getting Started :seedling:
 Once you have the prerequisites in place, follow these steps to perform the migration:
@@ -34,12 +34,19 @@ A Process determines work item types you can use (e.g., Epics, Features, User St
 
 Every project in Azure DevOps is based on a process, which governs how work items behave. Because of that, the processes will be migrated first.
 
-Processes migration will be handled manually as some work item types are locked in Azure DevOps, or the migration tools has partial support for such case. **Hence, to ensure a full migration, the processes will be built manually in the target organization(s).**
+Processes migration will be handled manually as some work item types are locked in Azure DevOps, or the migration tools has partial support for such case. **Hence, to ensure a full migration, the processes will be configured manually in the target organization(s).**
 
-export XML using witadmin ([guide](https://learn.microsoft.com/en-us/azure/devops/reference/witadmin/witadmin-import-export-process-configuration?view=azure-devops)) :
+**For a migration from Azure DevOps Server (on-premises):**
+
+A process in an Azure DevOps Server is configured using an XML file, and it is not reside within the Azure DevOps Server. In such case, you will have to export the process' XML configuration file to figure out what adjustments (if any) are needed for the target environment's process.
+
+Export the process' XML configuration file using the following ```witadmin``` command ([READ BEFORE EXECUTING!](https://learn.microsoft.com/en-us/azure/devops/reference/witadmin/witadmin-import-export-process-configuration?view=azure-devops)):
 ``` bash
 witadmin exportprocessconfig /collection:CollectionURL /p:ProjectName /f:"DirectoryPath\ProcessConfiguration.xml"
 ```
+* Replace ```CollectionURL``` with your Azure DevOps Server collection URL.
+* Replace ```ProjectName``` with your project's name within the collection.
+* ```"DirectoryPath\ProcessConfiguration.xml"``` will export the XML file to your current working directory, can be modified as well.
 
 ### :two: Teams Migration
 Before we proceed with the migration, let's first understand what process is.

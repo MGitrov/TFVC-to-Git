@@ -1,10 +1,12 @@
 - [Introduction](#introduction)
 - [Prerequisites](#prerequisites)
 - [Getting Started](#getting-started-seedling)
+  - [Processes Migration](#one-processes-migration)
+  - [Work Items (Boards, Backlogs, and Sprints), Iterations and Areas, and Teams Migration](#two-processes-migration)
   - [Code and Changesets Migration](#one-code-and-changesets-migration)
   - [Work Items Migration](#two-work-items-migration)
   - [Shared Queries Migration](#three-shared-queries-migration)
-  - [Processes Migration](#four-processes-migration)
+
 
 # Introduction
 A migration guide from a TFVC-based project to a Git-based project.
@@ -26,8 +28,6 @@ A migration guide from a TFVC-based project to a Git-based project.
 # Getting Started :seedling:
 Once you have the prerequisites in place, follow these steps to perform the migration:
 ### :one: Processes Migration
-Before we proceed with the migration, let's first understand what process is.
-
 A Process in Azure DevOps defines the way you manage and track work in your project. It is like a template that defines how work is managed in your project.
 
 A Process determines work item types you can use (e.g., Epics, Features, User Stories, Bugs, Tasks), along with the fields (e.g., Title, Description, Priority) and workflow states (e.g., To Do, In Progress, Done) for those work items.
@@ -40,7 +40,7 @@ Processes migration will be handled manually as some work item types are locked 
 
 A process in an Azure DevOps Server is configured using an XML file, and it is not reside within the Azure DevOps Server. In such case, you will have to export the process' XML configuration file to figure out what adjustments (if any) are needed for the target environment's process.
 
-Export the process' XML configuration file using the following ```witadmin``` command ([READ BEFORE EXECUTING!](https://learn.microsoft.com/en-us/azure/devops/reference/witadmin/witadmin-import-export-process-configuration?view=azure-devops)):
+Export the process' XML configuration file using the following ```witadmin``` command ([**READ BEFORE EXECUTING!**](https://learn.microsoft.com/en-us/azure/devops/reference/witadmin/witadmin-import-export-process-configuration?view=azure-devops)):
 ``` bash
 witadmin exportprocessconfig /collection:CollectionURL /p:ProjectName /f:"DirectoryPath\ProcessConfiguration.xml"
 ```
@@ -48,82 +48,27 @@ witadmin exportprocessconfig /collection:CollectionURL /p:ProjectName /f:"Direct
 * Replace ```ProjectName``` with your project's name within the collection.
 * ```"DirectoryPath\ProcessConfiguration.xml"``` will export the XML file to your current working directory, can be modified as well.
 
-### :two: Teams Migration
-Before we proceed with the migration, let's first understand what process is.
+### :two: Work Items (Boards, Backlogs, and Sprints), Iterations and Areas, and Teams Migration
+:purple_circle: **Will be migrated using Azure DevOps Migration Tools**
 
-### TEMPLATE ```configuration.json``` FILE
- ``` json
-{
-  "Serilog": {
-    "MinimumLevel": "Debug" # Configures logging.
-  },
+Work items are the building blocks for planning, tracking, and managing work in Azure DevOps. They help teams organize and monitor tasks, bugs, features, and requirements throughout the development lifecycle.
 
-  "MigrationTools": {
-    "Version": "16.0",
+**Common Work Item Types:**
+* **Epics:** A large piece of work that can be broken down into smaller pieces (e.g., Redesign the user experience for the website).
+* **Features:** Features represent what needs to be done to achieve the goal defined by the Epic.
+* **User Stories:** A small task or piece of functionality written from the perspective of the user.
+* **Bugs:** A problem or error in the application that needs fixing.
+* **Tasks:** A small piece of work needed to complete a User Story, Feature, or fix a Bug. Tasks are the actionable steps.
 
-    "CommonTools": {
-      "TfsTeamSettingsTool": {
-          "Enabled": true
-        },
-        
-      "TfsNodeStructureTool": {
-          "Areas": {
-              "Filters": [],
-              "Mappings": {}
-          },
-          "Enabled": true,
-          "Iterations": {
-              "Filters": [],
-              "Mappings": {}
-          },
-          "ReplicateAllExistingNodes": true, # Controls whether all area and iteration paths from the source project are replicated in the target project, regardless of filters or mappings.
-          "ShouldCreateMissingRevisionPaths": false # Ensures that specific paths (as per mappings and filters) are created in the target project if they are missing.
-      }
-    },
+**Iterations and Areas:**
+* **Iterations:** “When the work happens” (e.g., Sprint 1, Sprint 2).
+* **Areas:** “Where the work belongs” (e.g., Team A, Feature B).
 
-    "Endpoints": {
-      "Source": {
-        "EndpointType": "TfsTeamProjectEndpoint",
-        "Collection": "https://dev.azure.com/maximpetrov2612/",
-        "Project": "TFS-based test project",
-        "Authentication": {
-          "AuthenticationMode": "AccessToken",
-          "AccessToken": "PAT"
-        },
-        "ReflectedWorkItemIdField": "MigrationReflectedWorkItemId"
-      },
-
-      "Target": {
-        "EndpointType": "TfsTeamProjectEndpoint",
-        "Collection": "https://dev.azure.com/maximpetrov1297/",
-        "Project": "migrationTargetProject",
-        "Authentication": {
-          "AuthenticationMode": "AccessToken",
-          "AccessToken": "PAT"
-        },
-        "ReflectedWorkItemIdField": "Custom.MigrationReflectedWorkItemId"
-      }
-    },
-    
-    "Processors": [
-      {
-        "ProcessorType": "TfsWorkItemMigrationProcessor",
-        "Enabled": true,
-        "UpdateCreatedDate": true,
-        "UpdateCreatedBy": true,
-        "WIQLQuery": "SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @TeamProject AND [System.WorkItemType] NOT IN ('Test Suite', 'Test Plan','Shared Steps','Shared Parameter','Feedback Request') ORDER BY [System.ChangedDate] desc",
-        "FixHtmlAttachmentLinks": true,
-        "WorkItemCreateRetryLimit": 5,
-        "FilterWorkItemsThatAlreadyExistInTarget": false,
-        "GenerateMigrationComment": false,
-        "SourceName": "Source",
-        "TargetName": "Target"
-      }
-    ]
-  }
-}
-  ```
-
+Work items (boards, backlogs, and sprints), iterations and areas, and teams migration will be handled using the provided ```work-items.json``` file in this repository. From your working directory run the following command:
+``` bash
+devopsmigration execute --config .\work-items.json
+```
+:warning: You may need to modify the ```work-items.json``` file to fit your specific needs - [**DOCUMENTATION**](https://nkdagility.com/learn/azure-devops-migration-tools/).
 
 ### :one: Code and Changesets Migration
 **1.1.** Start by cloning the **TFVC-based** repository to your local machine using the following commands:
@@ -179,17 +124,6 @@ Before we proceed with the migration, let's first understand what process is.
   * In this sub-step, ensure you are able to authenticate via the CLI in order to ```push``` to the remote repository.
 
 ### :two: Work Items Migration
-Before we proceed with the migration, let's first understand what work items are.
-
-Work items are the building blocks for planning, tracking, and managing work in Azure DevOps. They help teams organize and monitor tasks, bugs, features, and requirements throughout the development lifecycle.
-
-**Common Work Item Types:**
-* **Epics:** A large piece of work that can be broken down into smaller pieces (e.g., Redesign the user experience for the website).
-* **Features:** Features represent what needs to be done to achieve the goal defined by the Epic.
-* **User Stories:** A small task or piece of functionality written from the perspective of the user.
-* **Bugs:** A problem or error in the application that needs fixing.
-* **Tasks:** A small piece of work needed to complete a User Story, Feature, or fix a Bug. Tasks are the actionable steps.
-
 The Getting Started guide is described [here](https://nkdagility.com/learn/azure-devops-migration-tools/getstarted/).
 
 **In the ```configuration.json``` file:**

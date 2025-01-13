@@ -2,7 +2,7 @@
 - [Prerequisites](#prerequisites)
 - [Getting Started](#getting-started-seedling)
   - [Processes Migration](#one-processes-migration)
-  - [Work Items (Boards, Backlogs, and Sprints), Iterations and Areas, and Teams Migration](#two-processes-migration)
+  - [Work Items (Boards, Backlogs, and Sprints), Iterations and Areas, and Teams Migration](#two-work-items-boards-backlogs-and-sprints-iterations-and-areas-and-teams-migration)
   - [Code and Changesets Migration](#one-code-and-changesets-migration)
   - [Work Items Migration](#two-work-items-migration)
   - [Shared Queries Migration](#three-shared-queries-migration)

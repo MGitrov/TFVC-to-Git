@@ -3,7 +3,7 @@
 - [Getting Started](#getting-started-seedling)
   - [Processes Migration](#one-processes-migration)
   - [Work Items (Boards, Backlogs, and Sprints), Iterations and Areas, and Teams Migration](#two-work-items-boards-backlogs-and-sprints-iterations-and-areas-and-teams-migration)
-  - [Code and Changesets Migration](#one-code-and-changesets-migration)
+  - [Branches and Changesets Migration](#three-branches-and-changesets-migration)
   - [Work Items Migration](#two-work-items-migration)
   - [Shared Queries Migration](#three-shared-queries-migration)
 
@@ -70,7 +70,7 @@ devopsmigration execute --config .\work-items.json
 ```
 :warning: You may need to modify the ```work-items.json``` file to fit your specific needs - [**DOCUMENTATION**](https://nkdagility.com/learn/azure-devops-migration-tools/).
 
-### :one: Code and Changesets Migration
+### :three: Branches and Changesets Migration
 **1.1.** Start by cloning the **TFVC-based** repository to your local machine using the following commands:
 * Cloning a TFVC-based repository from Azure DevOps Server (on-premises):
   1. Navigate from within the command prompt or terminal to the directory where you want to create the local repository.
@@ -122,21 +122,6 @@ devopsmigration execute --config .\work-items.json
   ```
   * The ```--all``` flag ensures that all local branches are pushed to the remote repository.
   * In this sub-step, ensure you are able to authenticate via the CLI in order to ```push``` to the remote repository.
-
-### :two: Work Items Migration
-The Getting Started guide is described [here](https://nkdagility.com/learn/azure-devops-migration-tools/getstarted/).
-
-**In the ```configuration.json``` file:**
-* In Azure DevOps go to ```Organization Settings > Process > [Your Process] > Work Item Types > Epic (or another type)```.
-  * Add a custom field of type ```Text (single line)```.
-    ![image](https://github.com/user-attachments/assets/67e6a9d2-fdaa-4c1f-9ecf-aaa4277c251c)
-
-  * Add the same custom field to the rest of the work items you would like to migrate **as an existing field**.
-    ![image](https://github.com/user-attachments/assets/78bf3d31-6ffa-4f0d-95c5-577789b209d4)
-
-  * Your custom field will now be available in all work item types where it has been added, and now you can adjust the ```ReflectedWorkItemIdField``` field both in ```Source``` and ```Target``` with the custom field value.
-* Ensure that the ```ProcessorType``` (under "Processors") is set to ```TfsWorkItemMigrationProcessor```.
-* Ensure that the ```Enabled``` field is set to ```True```.
 
 ### :three: Shared Queries Migration
 :warning: **Migration only available for shared queries.**

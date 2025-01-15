@@ -40,7 +40,7 @@ Processes migration will be handled manually as some work item types are locked 
 
 A process in an Azure DevOps Server is configured using an XML file, and it is not reside within the Azure DevOps Server. In such case, you will have to export the process' XML configuration file to figure out what adjustments (if any) are needed for the target environment's process.
 
-Export the process' XML configuration file using the following ```witadmin``` command ([**READ BEFORE EXECUTING!**](https://learn.microsoft.com/en-us/azure/devops/reference/witadmin/witadmin-import-export-process-configuration?view=azure-devops)):
+Export the process' XML configuration file using the following ```witadmin``` command :link: [**READ BEFORE EXECUTING!**](https://learn.microsoft.com/en-us/azure/devops/reference/witadmin/witadmin-import-export-process-configuration?view=azure-devops):
 ``` bash
 witadmin exportprocessconfig /collection:CollectionURL /p:ProjectName /f:"DirectoryPath\ProcessConfiguration.xml"
 ```
@@ -50,6 +50,18 @@ witadmin exportprocessconfig /collection:CollectionURL /p:ProjectName /f:"Direct
 
 ### :two: Work Items (Boards, Backlogs, and Sprints), Iterations and Areas, and Teams Migration
 :purple_circle: **Will be migrated using Azure DevOps Migration Tools**
+
+**Reverse Proxy:**
+
+The Azure DevOps Migration Tools have to use an HTTPS connection to the Azure DevOps Server. Usually, the Azure DevOps Server use the HTTP protocol which is not compatible with the requirement.
+
+Hence, to use an HTTPS connection to your Azure DevOps Server, you can either install an SSL/TLS certificate, or use a reverse proxy.
+
+![image](https://github.com/user-attachments/assets/dc86ffe0-237f-4ad6-858f-6ee22c035fe4)
+
+We can use Caddy as a reverse proxy to switch the Azure DevOps Server from HTTP to HTTPS. Caddy automatically provisions SSL/TLS certificates for the provided domain using Let’s Encrypt.
+
+:link: [**CONFIGURE REVERSE PROXY USING CADDY**](https://caddyserver.com/docs/quick-starts/reverse-proxy)
 
 Work items are the building blocks for planning, tracking, and managing work in Azure DevOps. They help teams organize and monitor tasks, bugs, features, and requirements throughout the development lifecycle.
 

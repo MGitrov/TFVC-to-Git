@@ -49,7 +49,9 @@ witadmin exportprocessconfig /collection:CollectionURL /p:ProjectName /f:"Direct
 * ```"DirectoryPath\ProcessConfiguration.xml"``` will export the XML file to your current working directory, can be modified as well.
 
 ### :two: Work Items (Boards, Backlogs, and Sprints), Iterations and Areas, and Teams Migration
-:purple_circle: **Will be migrated using Azure DevOps Migration Tools**
+:purple_circle: Will be migrated using Azure DevOps Migration Tools.
+
+:hourglass_flowing_sand: A migration of 2,400~ work items took nearly two hours.
 
 **Reverse Proxy:**
 

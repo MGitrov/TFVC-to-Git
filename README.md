@@ -63,7 +63,14 @@ Hence, to use an HTTPS connection to your Azure DevOps Server, you can either in
 
 We can use Caddy as a reverse proxy to switch the Azure DevOps Server from HTTP to HTTPS. Caddy automatically provisions SSL/TLS certificates for the provided domain using Let’s Encrypt.
 
-:link: [**CONFIGURE REVERSE PROXY USING CADDY**](https://caddyserver.com/docs/quick-starts/reverse-proxy)
+:link: [**READ CADDY'S DOCUMENTATION**](https://caddyserver.com/docs/)
+
+If you have used the ```Caddyfile``` provided in the repository, the collection URL you will use in the JSON files is ```https://localhost:9000/tfs/YourCollectionName```.
+
+From where the ```Caddyfile``` is located run the following command:
+``` bash
+caddy run --config .\Caddyfile
+```
 
 Work items are the building blocks for planning, tracking, and managing work in Azure DevOps. They help teams organize and monitor tasks, bugs, features, and requirements throughout the development lifecycle.
 

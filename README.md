@@ -4,8 +4,10 @@
   - [Processes Migration](#one-processes-migration)
   - [Work Items (Boards, Backlogs, and Sprints), Iterations and Areas, and Teams Migration](#two-work-items-boards-backlogs-and-sprints-iterations-and-areas-and-teams-migration)
   - [Branches and Changesets Migration](#three-branches-and-changesets-migration)
-  - [Work Items Migration](#two-work-items-migration)
-  - [Shared Queries Migration](#three-shared-queries-migration)
+  - [Shared Queries Migration](#four-shared-queries-migration)
+  - [Dashboards Migration](#five-dashboards-migration)
+  - [Assign Users To Teams](#six-assign-users-to-teams)
+  - [Pipelines Migration](#seven-pipelines-migration)
 
 
 # Introduction
@@ -160,14 +162,10 @@ Depending on the branches that has to be migrated, we will set the ```branches``
  ``` bash
   git log
   ```
-
 **1.3.** Add the Azure DevOps Git repository as a remote using the following command:
  ``` bash
-  git remote add origin https://{organization}@dev.azure.com/{organization}/{project}/_git/{repository}
+git remote add origin https://dev.azure.com/YourOrganizationName/YourProjectName/_git/YourRepositoryName
   ```
-  * Replace ```{organization}``` with your Azure DevOps organization name.
-  * Replace ```{project}``` with the name of the target Git project in Azure DevOps.
-  * Replace ```{repository}``` with the name of the target Git repository.
   * The URL also can be taken from the project's web portal in Azure DevOps.
 
 **1.4.** Push the migrated history to Azure DevOps Git Repository using the following command:
@@ -177,69 +175,35 @@ Depending on the branches that has to be migrated, we will set the ```branches``
   * The ```--all``` flag ensures that all local branches are pushed to the remote repository.
   * In this sub-step, ensure you are able to authenticate via the CLI in order to ```push``` to the remote repository.
 
-### :three: Shared Queries Migration
+### :four: Shared Queries Migration
+:purple_circle: Will be migrated using Azure DevOps Migration Tools.
+
 :warning: **Migration only available for shared queries.**
 
-:warning: **Shared queries migration requires adjusting the ```EndpointType``` field, and hence this migration type will be handled in a separate ```configuration.json``` file.**
-
-Before we proceed with the migration, let's first understand what shared queries are.
+:warning: **Shared queries migration requires adjusting the ```EndpointType``` field, and hence this migration type will be handled in a separate JSON configuration file.**
 
 Shared queries are pre-defined queries that allow teams to filter and view work items (e.g., tasks, bugs, user stories) based on specific criteria. These queries are shared across the team, making them a centralized and consistent way to track progress, identify issues, or prioritize work.
 
-**In the ```configuration.json``` file:**
- ``` json
-{
-  "Serilog": {
-    "MinimumLevel": "Information"
-  },
-  "MigrationTools": {
-    "Version": "16.0",
-    "Endpoints": {
-      "Source": {
-        "EndpointType": "TfsEndpoint",
-        "Collection": "https://dev.azure.com/nkdagility-preview/",
-        "Project": "migrationSource1",
-        "Authentication": {
-          "AuthenticationMode": "AccessToken",
-          "AccessToken": "jkashdjksahsjkfghsjkdaghvisdhuisvhladvnb"
-        }
-      },
-      "Target": {
-        "EndpointType": "TfsEndpoint",
-        "Collection": "https://dev.azure.com/nkdagility-preview/",
-        "Project": "migrationTest5",
-
-        "Authentication": {
-          "AuthenticationMode": "AccessToken",
-          "AccessToken": "lkasjioryislaniuhfhklasnhfklahlvlsdvnls"
-        },
-        "ReflectedWorkItemIdField": "Custom.ReflectedWorkItemId"
-      }
-    },
-    "CommonTools": {},
-    "Processors": [
-      {
-        "ProcessorType": "TfsSharedQueryProcessorOptions",
-        "Enabled": true,
-        "PrefixProjectToNodes": false,
-        "SharedFolderName": "Shared Queries",
-        "SourceToTargetFieldMappings": null,
-        "SourceName": "Source",
-        "TargetName": "Target"
-      }
-    ]
-  }
-}
-  ```
-* Replace ```Collection``` (both in ```Source``` and ```Target```) with your Azure DevOps organization name.
-* Replace ```Project``` (both in ```Source``` and ```Target```) with the respective project names.
-* Replace ```AccessToken``` (both in ```Source``` and ```Target```) with the PAT you have generated for your user.
-  * You may also set the ```AuthenticationMode``` (both in ```Source``` and ```Target```) field to ```Prompt``` (both in ```Source``` and ```Target```).
-* Ensure that the ```SharedFolderName``` (under "Processors") aligns with your shared queries' folder name in Azure DevOps (source proj).
+In the provided ```shared-queries.json``` file in this repository ensure that the ```SharedFolderName``` (under "Processors") aligns with your shared queries' folder name in Azure DevOps (source project).
   ![image](https://github.com/user-attachments/assets/d6baa748-cdb4-430e-a5e0-965e3f40e07e)
-* Make sure to rename one of the configuration files if you are executing them from within the same directory.
 
-### :five: Pipelines Migration
+Shared queries migration will be handled using the provided ```shared-queries.json``` file in this repository. From your working directory run the following command:
+``` bash
+devopsmigration execute --config .\shared-queries.json
+```
+:warning: You may need to modify the ```shared-queries.json``` file to fit your specific needs - :link: [**DOCUMENTATION**](https://nkdagility.com/learn/azure-devops-migration-tools/).
+
+### :five: Dashboards Migration
+:purple_circle: Will be migrated using CodeWizard's script.
+
+Dashboards are customizable, interactive panels that provide teams with a consolidated view of important project metrics, progress, and tools. Dashboards are associated with specific teams and can be tailored to display relevant widgets like sprint burndown charts, work item queries, team member details, and build pipeline summaries. They serve as a central hub for monitoring project health, team performance, and delivery timelines.
+
+### :six: Assign Users To Teams
+:purple_circle: Will be implemented using CodeWizard's script.
+
+Before we proceed with the migration, let's first understand what pipeline is.
+
+### :seven: Pipelines Migration
 Before we proceed with the migration, let's first understand what pipeline is.
 
 A Pipeline in Azure DevOps is a workflow automation tool that allows you to build, test, and deploy your code automatically.

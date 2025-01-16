@@ -25,6 +25,9 @@ A migration guide from a TFVC-based project to a Git-based project.
 ### **:three: Users Synchronization**
   All the users relevant for migration should be migrated to the relevant target Azure DevOps organization(s), along with their permissions.
 
+### **:four: Branches and History To Migrate**
+  Understand what branches you have to migrate, as it will affect the amount of history that has to be migrated so all the branches will be migrated properly. It will also affect the amount of time needed for the migration to be completed.
+
 # Getting Started :seedling:
 Once you have the prerequisites in place, follow these steps to perform the migration:
 ### :one: Processes Migration
@@ -55,6 +58,8 @@ witadmin exportprocessconfig /collection:CollectionURL /p:ProjectName /f:"Direct
 
 **Reverse Proxy:**
 
+THIS SECTION IS RELEVANT FOR EVERY PART WE MIGRATE USING THE AZURE DEVOPS MIGRATION TOOLS.
+
 The Azure DevOps Migration Tools have to use an HTTPS connection to the Azure DevOps Server. Usually, the Azure DevOps Server use the HTTP protocol which is not compatible with the requirement.
 
 Hence, to use an HTTPS connection to your Azure DevOps Server, you can either install an SSL/TLS certificate, or use a reverse proxy.
@@ -71,6 +76,7 @@ From where the ```Caddyfile``` is located run the following command:
 ``` bash
 caddy run --config .\Caddyfile
 ```
+------------------------------
 
 Work items are the building blocks for planning, tracking, and managing work in Azure DevOps. They help teams organize and monitor tasks, bugs, features, and requirements throughout the development lifecycle.
 
@@ -89,13 +95,13 @@ Work items (boards, backlogs, and sprints), iterations and areas, and teams migr
 ``` bash
 devopsmigration execute --config .\work-items.json
 ```
-:warning: You may need to modify the ```work-items.json``` file to fit your specific needs - [**DOCUMENTATION**](https://nkdagility.com/learn/azure-devops-migration-tools/).
+:warning: You may need to modify the ```work-items.json``` file to fit your specific needs - :link: [**DOCUMENTATION**](https://nkdagility.com/learn/azure-devops-migration-tools/).
 
 ### :three: Branches and Changesets Migration
 **1.1.** Start by cloning the **TFVC-based** repository to your local machine using the following commands:
+abc
 * Cloning a TFVC-based repository from Azure DevOps Server (on-premises):
-  1. Navigate from within the command prompt or terminal to the directory where you want to create the local repository.
-  2. Clone the TFVC repository with full history using the following command:
+  1. Clone the TFVC repository with full history using the following command:
   ``` bash
   git tfs clone --branches=all https://tfs-server:8080/tfs/Collection $/Project/Main .
   ```

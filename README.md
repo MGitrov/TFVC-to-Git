@@ -98,6 +98,10 @@ devopsmigration execute --config .\work-items.json
 :warning: You may need to modify the ```work-items.json``` file to fit your specific needs - :link: [**DOCUMENTATION**](https://nkdagility.com/learn/azure-devops-migration-tools/).
 
 ### :three: Branches and Changesets Migration
+:purple_circle: Will be migrated using git-tfs.
+
+:hourglass_flowing_sand: A migration of four year history took nearly two days.
+
 **1.1.** Start by cloning the **TFVC-based** repository to your local machine using the following commands:
 abc
 * Cloning a TFVC-based repository from Azure DevOps Server (on-premises):

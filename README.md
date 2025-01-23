@@ -110,23 +110,23 @@ Depending on the branches that has to be migrated, we will set the ```branches``
 
   **1.1.1** Clone all branches and their related history using the following command:
   ``` bash
-  git tfs clone --branches=all https://tfs-server:8080/tfs/Collection $/Project/Main
+  git tfs clone --branches=all http://tfs-server:8080/tfs/Collection $/Project/Main
   ```
-  * Replace ```https://tfs-server:8080/tfs/Collection``` with your Azure DevOps' Server collection URL.
+  * Replace ```http://tfs-server:8080/tfs/Collection``` with your Azure DevOps' Server collection URL.
   * Replace ```$/Project/Main``` with a path to one of your repository's branch. Basically, it will alow ```git-tfs``` to detect related branches, and make every branch in the TFVC repository a branch in the Git repository.
   * Using the ```--branches=all``` flag will cause ```git-tfs``` to clone the entire repository with all the branches and their related history (less recommended for complex branch scenarios).
-  * After the clone completion, a new directory will be created named by the cloned branch.
+  * After the clone completion, a new Git directory (new Git repository) will be created named by the cloned branch.
 
   **1.1.2** Clone a specified branch with its full history using the following command:
   ``` bash
-  git tfs clone --branches=none https://tfs-server:8080/tfs/Collection $/Project/Main
+  git tfs clone --branches=none http://tfs-server:8080/tfs/Collection $/Project/Main
   ```
-  * Replace ```https://tfs-server:8080/tfs/Collection``` with your Azure DevOps' Server collection URL.
+  * Replace ```http://tfs-server:8080/tfs/Collection``` with your Azure DevOps' Server collection URL.
   * Replace ```$/Project/Main``` with a path to one of your repository's branch. Basically, it will alow ```git-tfs``` to detect related branches, and make every branch in the TFVC repository a branch in the Git repository.
   * Using the ```--branches=none``` flag will cause ```git-tfs``` to clone only the ```$/Project/Main``` branch with its full history, whereas other branches and their relationships (parent/child/merge metadata) are not initialized or fetched automatically.
   * In Git, branches are natvely independent so this type of clone is more recommended and has a better chance to succeed.
   * There might be cases that the whole history for the ```$/Project/Main``` branch will not be fetched initially. In such case you can run the ```git tfs fetch --all``` command to force ```git-tfs``` to recheck all the changesets for the branch and ensures no changes are missed.
-  * After the clone completion, a new directory will be created named by the cloned branch.
+  * After the clone completion, a Git new directory (new Git repository) will be created named by the cloned branch.
   
     **1.1.2.1** Initialize and fetch additional branches with their full history using the following command:
  

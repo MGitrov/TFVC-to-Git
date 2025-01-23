@@ -201,8 +201,6 @@ Dashboards are customizable, interactive panels that provide teams with a consol
 ### :six: Assign Users To Teams
 :purple_circle: Will be implemented using CodeWizard's script.
 
-Before we proceed with the migration, let's first understand what pipeline is.
-
 ### :seven: Pipelines Migration
 Before we proceed with the migration, let's first understand what pipeline is.
 

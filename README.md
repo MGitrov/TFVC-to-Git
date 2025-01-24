@@ -130,7 +130,7 @@ Depending on the branches that has to be migrated, we will set the ```branches``
   
     **1.1.2.1** Initialize and fetch additional branches with their full history using the following command:
  
-    :warning: Before initializing and fetching additional branches, ensure you have **cloned their parent branch on step 1.1.2**!
+    :warning: By default, ```git-tfs``` tries to maintain the hierarchical relationships between TFS branches. If the current branch you want to init and fetch was created as a child of some other branch, ```git-tfs``` considers the parent branch necessary to preserve the branch structure. **But**, pay attention to it as a manual intervention might be needed.
     ``` bash
     git tfs branch --init $/Project/Main
     ```

@@ -1,0 +1,7 @@
+{
+	auto_https disable_redirects
+}
+
+https://localhost:9000 (DELETE IF USED - Caddy listens for HTTPS requests on localhost using port 9000) {
+	reverse_proxy http://localhost:8080 (DELETE IF USED - Incoming requests to https://localhost:9000 are forwarded to http://localhost:8080)
+}

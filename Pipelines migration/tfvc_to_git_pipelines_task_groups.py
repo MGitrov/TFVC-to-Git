@@ -27,7 +27,8 @@ def get_project_id(organization, project_name, authentication_header):
     '''
     This function fetches the id of a project.
     '''
-    url = f"{organization}/_apis/projects/{project_name}?api-version=6.0-preview"
+    api_version = "6.0-preview"
+    url = f"{organization}/_apis/projects/{project_name}?api-version={api_version}"
 
     print("##############################")
     print(f"[INFO] Fetching the ID of '{project_name}' project from '{organization}'...")
@@ -57,7 +58,8 @@ def get_task_groups(organization, project_name, authentication_header):
     """
     This function fetches all task groups from a project.
     """
-    url = f"{organization}/{project_name}/_apis/distributedtask/taskgroups?api-version=6.0-preview"
+    api_version = "6.0-preview"
+    url = f"{organization}/{project_name}/_apis/distributedtask/taskgroups?api-version={api_version}"
 
     print(f"[INFO] Fetching task groups from '{project_name}' in '{organization}'...")
 

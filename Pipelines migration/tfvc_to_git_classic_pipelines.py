@@ -3,7 +3,7 @@ import base64
 import requests
 import json
 import yaml
-from datetime import datetime
+from datetime import datetime, UTC
 import re
 from dotenv import load_dotenv
 
@@ -78,7 +78,7 @@ def get_project_id(organization, project_name, authentication_header):
 
         if response.status_code == 200:
             project_id = response.json()["id"]
-            print(f"Project: {project_name} | ID: {project_id}")
+            print(f"\n• Project: {project_name} | ID: {project_id}")
 
             return project_id
         
@@ -99,7 +99,6 @@ def get_pipelines(organization, project_name, authentication_header):
     api_version = "6.0-preview"
     url = f"{organization}/{project_name}/_apis/pipelines?api-version={api_version}"
 
-    print("##############################")
     print(f"[INFO] Fetching pipelines from '{project_name}'...")
     print(f"[DEBUG] API URL: {url}")
 
@@ -109,10 +108,10 @@ def get_pipelines(organization, project_name, authentication_header):
 
         if response.status_code == 200:
             pipelines = response.json().get("value", []) # Parses the JSON response and retrieves the list of pipelines from the value field.
-            print(f"[INFO] There are {len(pipelines)} pipelines in '{organization}'.")
+            print(f"[INFO] There are {len(pipelines)} pipelines in '{organization}':")
 
             for pipeline in pipelines:
-                print(f"- Pipeline id: {pipeline['id']} | Name: {pipeline['name']}")
+                print(f"• Pipeline id: {pipeline['id']} | Name: {pipeline['name']}")
 
             return pipelines
         
@@ -164,7 +163,7 @@ def get_all_users(organization, authentication_header):
     api_version = "6.0-preview"
     url = f"https://vsaex.dev.azure.com/{organization}/_apis/userentitlements?api-version={api_version}"
 
-    print("##############################")
+    print("\n##############################")
     print(f"[INFO] Fetching the users of the '{organization}' organization...")
     print(f"[DEBUG] API URL: {url}")
 
@@ -175,7 +174,7 @@ def get_all_users(organization, authentication_header):
         if response.status_code == 200:
             users = response.json().get("members", [])
 
-            print(f"Found {len(users)} users:")
+            print(f"\nFound {len(users)} users in '{organization}' organization:")
             for idx, user in enumerate(users):
                 print(f"{idx + 1}. {user['user']['displayName']} - {user['id']}")
 
@@ -198,7 +197,7 @@ def get_service_connections(organization, project, authentication_header):
     api_version = "6.0-preview"
     url = f"{organization}/{project}/_apis/serviceendpoint/endpoints?api-version={api_version}"
 
-    print("##############################")
+    print("\n##############################")
     print(f"[INFO] Fetching the service connections of the '{organization}' organization...")
     print(f"[DEBUG] API URL: {url}")
 
@@ -229,7 +228,7 @@ def get_queues(organization, project_name, authentication_header):
     api_version = "6.0-preview"
     url = f"{organization}/{project_name}/_apis/distributedtask/queues?api-version={api_version}"
 
-    print("##############################")
+    print("\n##############################")
     print(f"[INFO] Fetching the queues of the '{project_name}' project...")
     print(f"[DEBUG] API URL: {url}")
 
@@ -239,7 +238,7 @@ def get_queues(organization, project_name, authentication_header):
 
         if response.status_code == 200:
             queues = response.json().get("value", [])
-            print(f"[INFO] There are {len(queues)} queues in '{project_name}' project.")
+            #print(f"[INFO] There are {len(queues)} queues in '{project_name}' project.")
 
         else:
             print(f"\033[1;31m[ERROR] Failed to fetch the queues of the '{project_name}' project.\033[0m")
@@ -267,7 +266,8 @@ def get_agent_pools(organization, authentication_header):
     api_version = "6.0-preview"
     url = f"{organization}/_apis/distributedtask/pools?api-version={api_version}"
 
-    print(f"\n[INFO] Fetching the available agent pool(s) for '{organization}'...")
+    print("\n##############################")
+    print(f"[INFO] Fetching the available agent pool(s) for '{organization}'...")
     print(f"[DEBUG] API URL: {url}")
 
     response = requests.get(url, headers=authentication_header)
@@ -305,7 +305,76 @@ def choose_agent_pool(pools):
         except ValueError:
             print("\033[1;31m[ERROR] Invalid input. Please enter a number.\033[0m")
 
+def get_git_target_details():
+    """
+    This function prompts the user to provide information the target Git environment the build pipeline will be migrated to.
+    """
+    print("\n\033[1;33mPlease provide information about the Git repository containing the relevant codebase for the current migrated pipeline.\033[0m")
+    
+    print("\nAvailable Git repositories in the target project:")
+
+    api_version = "6.0-preview"
+    target_repositories = requests.get(
+            f"{TARGET_ORGANIZATION}/{TARGET_PROJECT}/_apis/git/repositories?api-version={api_version}",
+            headers=TARGET_AUTHENTICATION_HEADER
+        ).json()["value"]
+    
+    for idx, repo in enumerate(target_repositories, 1):
+        print(f"{idx} - {repo['name']}")
+    
+    repository_choice = input("\nSelect the repository number (select the repository containing the relevant codebase for the current migrated pipeline): ")
+    selected_repository = target_repositories[int(repository_choice) - 1]
+
+    print("\nAvailable branches in the selected repository:")
+
+    branches = requests.get(
+            f"{TARGET_ORGANIZATION}/{TARGET_PROJECT}/_apis/git/repositories/{selected_repository['id']}/refs?filter=heads/&api-version={api_version}",
+            headers=TARGET_AUTHENTICATION_HEADER
+        ).json()["value"]
+    
+    for idx, branch in enumerate(branches, 1):
+        clean_branch_name = branch["name"].replace('refs/heads/', '')
+        print(f"{idx} - {clean_branch_name}")
+    
+    branch_choice = input("\nSelect the branch number (select the branch containing the relevant codebase for the current migrated pipeline): ")
+    selected_branch = branches[int(branch_choice) - 1]
+    
+    return {
+        'repository': selected_repository,
+        'branch': selected_branch
+    }
+
+def update_repository_section(pipeline_json_config, git_details):
+    """
+    This function adjusts the 'repository' section of a build pipeline based on user-provided information.
+    """
+    tfvc_path = pipeline_json_config['repository'].get('defaultBranch')
+    print(f"\n\033[1mThe default TFVC branch of the '{pipeline_json_config['name']}' pipeline: {tfvc_path}\033[0m")
+    
+    # Get user input about Git target
+    #git_details = get_git_target_details()
+    clean_branch_name = git_details["branch"]["name"].replace('refs/heads/', '')
+    # Update the repository configuration
+    pipeline_json_config['repository'].update({
+        'id': git_details["repository"]["id"],
+        'type': "TfsGit",
+        'name': git_details["repository"]["name"],
+        'defaultBranch': f"refs/heads/{clean_branch_name}",
+        'url': git_details["repository"]["url"]
+    })
+
+    pipeline_json_config.pop("rootFolder", None)
+    
+    print(f"\n[INFO] In the target environment, the '{pipeline_json_config['name']}' pipeline has been configured to monitor:")
+    print(f"• Repository: {git_details["repository"]["name"]}")
+    print(f"• Branch: {clean_branch_name}")
+    
+    return pipeline_json_config
+
 def update_triggers_section(triggers_section, target_repository):
+    """
+    This function adjusts the 'triggers' section of a build pipeline.
+    """
     adjusted_triggers = []
 
     for trigger in triggers_section:
@@ -367,6 +436,9 @@ def update_triggers_section(triggers_section, target_repository):
     return adjusted_triggers
 
 def update_queue_section(pipeline_json_config, available_pools_map, available_target_pools):
+    """
+    This function adjusts the 'queue' (and additional queue-related staff) section of a build pipeline.
+    """
     available_queues = get_queues(TARGET_ORGANIZATION, TARGET_PROJECT, TARGET_AUTHENTICATION_HEADER)
     queue_section = pipeline_json_config.get("queue", {})
     source_pool_name = queue_section.get("pool", {}).get("name", "")
@@ -394,7 +466,7 @@ def update_queue_section(pipeline_json_config, available_pools_map, available_ta
                 pipeline_json_config['queue']['_links'] = queue_links
 
         else:
-            raise Exception(f"No queue found for pool '{source_pool_name}' in '{TARGET_ORGANIZATION}'.")
+            raise Exception(f"\033[1;31mNo queue found for pool '{source_pool_name}' in '{TARGET_ORGANIZATION}'.\033[0m")
 
     else:
         # Falls back to a default pool (e.g., "Azure Pipelines").
@@ -433,6 +505,7 @@ def get_task_groups(organization, project_name, authentication_header):
     api_version = "6.0-preview"
     url = f"{organization}/{project_name}/_apis/distributedtask/taskgroups?api-version={api_version}"
 
+    print("\n##############################")
     print(f"[INFO] Fetching task groups from '{project_name}' in '{organization}'...")
     
     try:
@@ -476,7 +549,7 @@ def handle_task_groups(pipeline_json_config):
 
                 else:
                     raise Exception(
-                        f"Could not find a matching task group for '{display_name}' in the target environment."
+                        f"\033[1;31mCould not find a matching task group for '{display_name}' in the target environment.\033[0m"
                         "\n[INFO] Please ensure all required task groups exist before migrating the pipeline."
                     )
 
@@ -489,6 +562,7 @@ def get_variable_groups(organization, project_name, authentication_header):
     api_version = "6.0-preview"
     url = f"{organization}/{project_name}/_apis/distributedtask/variablegroups?api-version={api_version}"
 
+    print("\n##############################")
     print(f"[INFO] Fetching variable groups from '{project_name}' project in '{organization}'...")
 
     try:
@@ -531,13 +605,47 @@ def handle_variable_groups(pipeline_json_config):
 
             else:
                 raise Exception(
-                    f"Could not find a matching variable group for '{variable_group_name}' in the target environment."
+                    f"\033[1;31mCould not find a matching variable group for '{variable_group_name}' in the target environment.\033[0m"
                     "\n[INFO] Please ensure all required variable groups exist before migrating the pipeline."
                 )
     
     return pipeline_json_config
 
-def adjust_pipeline_config(target_projects, pipeline_json_config, target_repository): # REVIEW.
+def handle_service_connections(pipeline_json_config):
+    source_service_connections = get_service_connections(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER)
+    target_service_connections = get_service_connections(TARGET_ORGANIZATION, TARGET_PROJECT, TARGET_AUTHENTICATION_HEADER)
+
+    # Creates a mapping of service connection names to their ids in the target environment for more efficient lookup.
+    target_connections_by_name = {tsc["name"]: tsc["id"] for tsc in target_service_connections}
+
+    for phase in pipeline_json_config.get("process", {}).get("phases", []):
+        for step in phase.get("steps", []):
+            if step.get("inputs", {}).get("externalEndpoints"): # Checks if the current step has inputs and uses service connections.
+                source_service_connection_id = step["inputs"]["externalEndpoints"]
+                
+                # Extracts the name of the source service connection.
+                source_service_connection = next((ssc for ssc in source_service_connections if ssc["id"] == source_service_connection_id), None)
+                
+                if source_service_connection:
+                    ssc_name = source_service_connection["name"]
+
+                    if ssc_name in target_connections_by_name:
+                        step["inputs"]["externalEndpoints"] = target_connections_by_name[ssc_name]
+
+                    else:
+                        raise Exception(
+                            f"Service connection '{ssc_name}' not found in target environment.\n"
+                            f"Available service connections:\n"
+                            f"- " + "\n- ".join(target_connections_by_name.keys())
+                        )
+                else:
+                    raise Exception(
+                        f"Could not find source service connection with id: {source_service_connection_id}."
+                    )
+
+    return pipeline_json_config
+
+def adjust_pipeline_config(pipeline_json_config, git_details): # REVIEW.
     """
     This function adjusts the pipeline configuration file to use Git as the source.
     """
@@ -548,18 +656,10 @@ def adjust_pipeline_config(target_projects, pipeline_json_config, target_reposit
     #pipeline_json_config["triggers"] = adjusted_triggers_section
 
     # Adjusts the 'repository' section.
-    repository = pipeline_json_config["repository"]
-
-    repository["id"] = target_repository["id"]
-    repository["type"] = "TfsGit"
-    repository["name"] = target_repository["name"]
-    repository["url"] = target_repository["url"] #f"{TARGET_ORGANIZATION}/{TARGET_PROJECT}/_git/{target_repository['name']}"
-    repository["defaultBranch"] = target_repository["defaultBranch"]
-
-    repository.pop("rootFolder", None)
+    pipeline_json_config = update_repository_section(pipeline_json_config, git_details)
 
     # Adjusts the 'properties' sub-section.
-    properties = repository.get('properties', {})
+    properties = pipeline_json_config["repository"].get('properties', {})
 
     git_specific_fields = { # Specific fields that are added once the source is changed to Git.
         "reportBuildStatus": "true",
@@ -578,7 +678,6 @@ def adjust_pipeline_config(target_projects, pipeline_json_config, target_reposit
     # Adjusts the queue-related staff.
     available_target_pools = get_agent_pools(TARGET_ORGANIZATION, TARGET_AUTHENTICATION_HEADER)
     available_pools_map = {pool["name"]: pool for pool in available_target_pools}
-
     pipeline_json_config = update_queue_section(pipeline_json_config, available_pools_map, available_target_pools)
     
     # Adjusts the 'authoredBy' section.
@@ -618,7 +717,7 @@ def adjust_pipeline_config(target_projects, pipeline_json_config, target_reposit
     pipeline_json_config["uri"] = "vstfs:///Build/Definition/0"
     pipeline_json_config["queueStatus"] = 0
     pipeline_json_config["revision"] = 1
-    pipeline_json_config["createdDate"] = datetime.utcnow().isoformat()
+    pipeline_json_config["createdDate"] = datetime.now(UTC).isoformat()
 
     # Adjusts the 'project' section.
     pipeline_json_config["project"] = {
@@ -651,73 +750,7 @@ def adjust_pipeline_config(target_projects, pipeline_json_config, target_reposit
     pipeline_json_config = handle_variable_groups(pipeline_json_config)
 
     # Adjusts service connections.
-    source_service_connections = get_service_connections(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER)
-    target_service_connections = get_service_connections(TARGET_ORGANIZATION, TARGET_PROJECT, TARGET_AUTHENTICATION_HEADER)
-    service_connection_ids = set()
-
-    process = pipeline_json_config.get("process")
-
-    if not process:
-        print("[WARNING] 'process' section is missing in the pipeline configuration.")
-
-    elif not isinstance(process, dict):
-        print("[ERROR] 'process' is not a dictionary. Check the pipeline configuration.")
-
-    else:
-        phases = process.get("phases", [])
-        if not isinstance(phases, list):
-            print("[ERROR] 'phases' in 'process' is not a list. Check the pipeline configuration.")
-        else:
-            for phase in phases:
-                if not isinstance(phase, dict):
-                    print("[WARNING] Skipping invalid phase that is not a dictionary.")
-                    continue
-                steps = phase.get("steps", [])
-                if not isinstance(steps, list):
-                    print("[WARNING] 'steps' in a phase is not a list. Skipping.")
-                    continue
-                for step in steps:
-                    if not isinstance(step, dict):
-                        print("[WARNING] Skipping invalid step that is not a dictionary.")
-                        continue
-                    # Validate 'inputs' in 'step'
-                    inputs = step.get("inputs")
-                    if not inputs:
-                        print("[INFO] No 'inputs' section in this step.")
-                    elif not isinstance(inputs, dict):
-                        print("[ERROR] 'inputs' is not a dictionary. Skipping step.")
-                    else:
-                        external_endpoints = inputs.get("externalEndpoints")
-                        if external_endpoints:
-                            service_connection_ids.add(external_endpoints)
-                            print(f"[INFO] Found 'externalEndpoints': {external_endpoints}")
-                        else:
-                            print("[INFO] 'externalEndpoints' is not present in 'inputs'.")
-
-    def map_service_connection(source_id, source_connections, target_connections):
-        source_connection = next((conn for conn in source_connections if conn.get("id") == source_id), None)
-
-        for target_connection in target_connections:
-            if source_connection.get("name") == target_connection.get("name"):
-                return target_connection["id"]
-
-        print(f"[WARNING] No matching service connection found for source ID: {source_id}. Skipping...")
-        return None
-
-    mapped_service_connections = {}
-    for source_id in service_connection_ids:
-        mapped_service_connections[source_id] = map_service_connection(
-            source_id,
-            source_service_connections,
-            target_service_connections
-    )
-    print(f"\n{mapped_service_connections}\n")
-    for phase in pipeline_json_config.get("process", {}).get("phases", []):
-        for step in phase.get("steps", []):
-            if "inputs" in step and "externalEndpoints" in step["inputs"]:
-                source_id = step["inputs"]["externalEndpoints"]
-                if source_id in mapped_service_connections:
-                    step["inputs"]["externalEndpoints"] = mapped_service_connections[source_id]
+    pipeline_json_config = handle_service_connections(pipeline_json_config)
 
     print(f"\n[DEBUG] Adjusted Configuration:\n{json.dumps(pipeline_json_config, indent=4)}\n")
     print("[INFO] Pipeline updated successfully.")
@@ -750,7 +783,8 @@ def select_pipelines_to_migrate(pipelines):
             ]
 
             if not selected_pipelines:
-                raise ValueError("No valid pipelines selected.")
+                raise ValueError("\033[1;31m[ERROR] No valid pipelines selected.\033[0m")
+            
             return selected_pipelines
         
         except (ValueError, IndexError) as e:
@@ -782,91 +816,47 @@ def migrate_pipelines(source_organization, target_organization, source_project, 
     """
     print("\n\033[1;33mEnsure the trigger branches exist in your target environment before starting the migration.\033[0m")
     print("\033[1;33mEnsure you have configured agent pools in your target environment before starting the migration.\033[0m\n")
-    print("[INFO] Starting pipeline migration process...")
+
+    print("\033[1m=\033[0m" * 100)
     print(f"[DEBUG] Source Organization: {source_organization}")
     print(f"[DEBUG] Target Organization: {target_organization}")
     print(f"[DEBUG] Source Project: {source_project}")
     print(f"[DEBUG] Target Project: {target_project}")
+    print("\033[1m=\033[0m" * 100)
 
-    # Get Target Project ID
-    #target_project_id = get_project_id(target_organization, target_project, target_headers)
+    print("\n[INFO] Starting pipeline migration process...\n")
 
-    # Fetch Available Queues (Agent Pools) in Target Project
-    """
-    queues_url = f"{target_organization}/{target_project}/_apis/distributedtask/queues?api-version=6.0-preview"
-    response = requests.get(queues_url, headers=target_headers)
-
-    
-    if response.status_code == 200:
-        queues = response.json().get("value", [])
-        filtered_target_queues = [queue for queue in queues if not queue["pool"].get("isLegacy", False)]
-        print("\nFiltered Queues (Non-Legacy):\n")
-        print(filtered_target_queues)
-    else:
-        print(f"[ERROR] Failed to fetch queues: {response.status_code} - {response.text}")
-        return
-    """
-
-    # Fetch Target Repositories
     try:
-        target_repositories = requests.get(
-            f"{target_organization}/{target_project}/_apis/git/repositories?api-version=6.0-preview",
-            headers=target_headers
-        ).json()["value"]
+        source_pipelines = get_pipelines(source_organization, source_project, source_headers)
+
     except Exception as e:
-        print(f"[ERROR] Failed to fetch target repositories: {e}")
-        return
+        print(f"\033[1;31m[ERROR] Failed to fetch pipelines from the source project: {e}\033[0m")
+        return None
 
-    # Fetch Target Projects & Service Connections
-    target_projects = get_projects(target_organization, target_headers)
-    target_service_connections = get_service_connections(target_organization, target_project, target_headers)
+    if not source_pipelines:
+        print(f"\033[1m[INFO] No pipelines found in the '{source_project}' project in the '{source_organization}' organization.\033[0m")
+        return None
 
-    # Fetch Source Pipelines
-    try:
-        pipelines = get_pipelines(source_organization, source_project, source_headers)
-    except Exception as e:
-        print(f"[ERROR] Failed to fetch pipelines from the source project: {e}")
-        return
+    print("\n\033[1m[INFO] Fetching pipelines completed.\033[0m")
+    selected_pipeline_ids = select_pipelines_to_migrate(source_pipelines)
 
-    if not pipelines:
-        print("[INFO] No pipelines found to migrate.")
-        return
-
-    print("\n[INFO] Fetching pipelines completed.")
-    selected_pipeline_ids = select_pipelines_to_migrate(pipelines)
-
-    for pipeline in pipelines:
+    for pipeline in source_pipelines:
         if pipeline["id"] in selected_pipeline_ids:
             try:
-                print(f"##############################>-{pipeline['name']}<##############################")
+                print(f"\n##############################>-{pipeline['name']}<##############################")
                 pipeline_id = pipeline["id"]
                 pipeline_name = pipeline["name"]
                 pipeline_config = get_pipeline_config(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, pipeline_id)
 
             except Exception as e:
-                print(f"[ERROR] Failed to fetch or process pipeline '{pipeline['name']}': {e}")
+                print(f"\033[1;31m[ERROR] Failed to fetch or process pipeline '{pipeline['name']}': {e}\033[0m")
                 continue
 
             try:
-                # Prompt the user to select the target repository
-                print("\n[INFO] Available Target Repositories:")
-                for idx, repository in enumerate(target_repositories, 1):
-                    print(f"{idx} - {repository['name']} (id: {repository['id']})")
-                repository_selection = input("\nEnter the number of the target repository to commit the configuration file to (or press Enter to skip): ").strip()
+                # Prompts the user to provide information about the target Git environment.
+                git_details = get_git_target_details()
 
-                if repository_selection.isdigit():
-                    repository_index = int(repository_selection) - 1
-                    if 0 <= repository_index < len(target_repositories):
-                        target_repository = target_repositories[repository_index]
-                    else:
-                        print(f"[WARNING] Invalid repository selection. Skipping pipeline '{pipeline_name}'.")
-                        continue
-                else:
-                    print(f"[WARNING] No valid repository selected. Skipping pipeline '{pipeline_name}'.")
-                    continue
-
-                # Update pipeline configuration to use Git
-                adjusted_pipeline_config = adjust_pipeline_config(target_projects, pipeline_config, target_repository)
+                adjusted_pipeline_config = adjust_pipeline_config(pipeline_config, git_details)
                 create_pipeline(TARGET_ORGANIZATION, TARGET_PROJECT, TARGET_AUTHENTICATION_HEADER, adjusted_pipeline_config)
 
             except Exception as e:

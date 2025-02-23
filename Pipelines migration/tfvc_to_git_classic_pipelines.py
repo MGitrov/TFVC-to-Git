@@ -13,7 +13,7 @@ SOURCE_ORGANIZATION=os.getenv("SOURCE_ORGANIZATION")
 SOURCE_PROJECT=os.getenv("SOURCE_PROJECT")
 SOURCE_PAT = os.getenv("SOURCE_PAT")
 
-GAU_TARGET_ORGANIZATION="maximpetrov1297"
+GAU_TARGET_ORGANIZATION=os.getenv("GAU_TARGET_ORGANIZATION") # The target organization without the 'https://dev.azure.com/' part, only the name.
 TARGET_ORGANIZATION=os.getenv("TARGET_ORGANIZATION")
 TARGET_PROJECT=os.getenv("TARGET_PROJECT")
 TARGET_PAT = os.getenv("TARGET_PAT")

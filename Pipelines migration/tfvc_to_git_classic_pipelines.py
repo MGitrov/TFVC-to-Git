@@ -225,28 +225,6 @@ def get_service_connections(organization, project, authentication_header):
 
     return service_connections
 
-def download_pipeline_configs(organization, project_name, authentication_header, pipeline_ids, output_directory): # DEPRECATED.
-    """
-    Downloads the JSON configuration of multiple pipelines and saves them to files.
-    """
-    for pipeline_id in pipeline_ids:
-        try:
-            url = f"{organization}/{project_name}/_apis/build/Definitions/{pipeline_id}?api-version=6.0"
-            response = requests.get(url, headers=authentication_header)
-            
-            if response.status_code == 200:
-                pipeline_config = response.json()
-                file_name = f"{output_directory}/pipeline_{pipeline_id}.json"
-                
-                with open(file_name, "w") as json_file:
-                    json.dump(pipeline_config, json_file, indent=4)
-                
-                print(f"[INFO] Successfully downloaded pipeline {pipeline_id} to {file_name}.")
-            else:
-                print(f"[ERROR] Failed to download pipeline {pipeline_id}: {response.status_code} - {response.text}")
-        except Exception as e:
-            print(f"[ERROR] An error occurred while downloading pipeline {pipeline_id}: {str(e)}")
-
 def get_queues(organization, project_name, authentication_header):
     api_version = "6.0-preview"
     url = f"{organization}/{project_name}/_apis/distributedtask/queues?api-version={api_version}"
@@ -448,6 +426,117 @@ def update_queue_section(pipeline_json_config, available_pools_map, available_ta
         
     return pipeline_json_config
 
+def get_task_groups(organization, project_name, authentication_header):
+    """
+    This function fetches all task groups from a project.
+    """
+    api_version = "6.0-preview"
+    url = f"{organization}/{project_name}/_apis/distributedtask/taskgroups?api-version={api_version}"
+
+    print(f"[INFO] Fetching task groups from '{project_name}' in '{organization}'...")
+    
+    try:
+        response = requests.get(url, headers=authentication_header)
+        print(f"[DEBUG] Request's Status Code: {response.status_code}")
+        
+        if response.status_code == 200:
+            task_groups = response.json().get("value", [])
+            return task_groups
+        
+        else:
+            print(f"\033[1;31m[ERROR] Failed to fetch task groups from '{project_name}' project.\033[0m")
+            print(f"[DEBUG] Request's Status Code: {response.status_code}")
+            print(f"[DEBUG] Response: {response.text}")
+            return None
+            
+    except requests.exceptions.RequestException as e:
+        print(f"\033[1;31m[ERROR] An error occurred while fetching task groups: {e}\033[0m")
+        return None
+
+def handle_task_groups(pipeline_json_config):
+    """
+    This function adjusts task group references in a build pipeline to match the target environment.
+    """
+    target_task_groups = get_task_groups(TARGET_ORGANIZATION, TARGET_PROJECT, TARGET_AUTHENTICATION_HEADER)
+
+    for phase in pipeline_json_config.get("process", {}).get("phases", []):
+        for step in phase.get("steps", []):
+            if step.get("task", {}).get("definitionType") == "metaTask": # In Azure DevOps, when a task is another task group, its 'definitionType' field will be 'metaTask'.
+                display_name = step.get("displayName")
+
+                # Maps the source task group with its respective target task group.
+                matching_task_group = None
+                for task_group in target_task_groups:
+                    if task_group["name"] in display_name:
+                        matching_task_group = task_group
+                        break
+
+                if matching_task_group:
+                    step["task"].update({"id": matching_task_group["id"], "definitionType": "metaTask"})
+
+                else:
+                    raise Exception(
+                        f"Could not find a matching task group for '{display_name}' in the target environment."
+                        "\n[INFO] Please ensure all required task groups exist before migrating the pipeline."
+                    )
+
+    return pipeline_json_config
+
+def get_variable_groups(organization, project_name, authentication_header):
+    '''
+    This function fetches all variable groups from a project.
+    '''
+    api_version = "6.0-preview"
+    url = f"{organization}/{project_name}/_apis/distributedtask/variablegroups?api-version={api_version}"
+
+    print(f"[INFO] Fetching variable groups from '{project_name}' project in '{organization}'...")
+
+    try:
+        response = requests.get(url, headers=authentication_header)
+        print(f"[DEBUG] Request's Status Code: {response.status_code}")
+
+        if response.status_code == 200:
+            variable_groups = response.json().get("value", [])
+            return variable_groups
+
+        else:
+            print(f"\033[1;31m[ERROR] Failed to fetch variable groups from '{project_name}' project.\033[0m")
+            print(f"[DEBUG] Request's Status Code: {response.status_code}")
+            print(f"[DEBUG] Response Body: {response.text}")
+            return None
+
+    except requests.exceptions.RequestException as e:
+        print(f"\033[1;31m[ERROR] An error occurred while fetching variable groups: {e}\033[0m")
+        return None
+
+def handle_variable_groups(pipeline_json_config):
+    """
+    This function adjusts variable group references in a build pipeline to match the target environment.
+    """
+    target_variable_groups = get_variable_groups(TARGET_ORGANIZATION, TARGET_PROJECT, TARGET_AUTHENTICATION_HEADER)
+    
+    if "variableGroups" in pipeline_json_config:
+        for variable_group in pipeline_json_config["variableGroups"]:
+            variable_group_name = variable_group.get("name")
+            
+            # Maps the source variable group with its respective target variable group.
+            matching_variable_group = None
+            for target_variable_group in target_variable_groups:
+                if target_variable_group["name"] == variable_group_name:
+                    matching_variable_group = target_variable_group
+                    break
+            
+            if matching_variable_group:
+                variable_group["id"] = matching_variable_group["id"]
+
+            else:
+                raise Exception(
+                    f"Could not find a matching variable group for '{variable_group_name}' in the target environment."
+                    "\n[INFO] Please ensure all required variable groups exist before migrating the pipeline."
+                )
+    
+    return pipeline_json_config
+
 def adjust_pipeline_config(target_projects, pipeline_json_config, target_repository): # REVIEW.
     """
     This function adjusts the pipeline configuration file to use Git as the source.
@@ -490,9 +579,7 @@ def adjust_pipeline_config(target_projects, pipeline_json_config, target_reposit
     available_target_pools = get_agent_pools(TARGET_ORGANIZATION, TARGET_AUTHENTICATION_HEADER)
     available_pools_map = {pool["name"]: pool for pool in available_target_pools}
 
-    queue_section = update_queue_section(pipeline_json_config, available_pools_map, available_target_pools)
-
-    pipeline_json_config = queue_section
+    pipeline_json_config = update_queue_section(pipeline_json_config, available_pools_map, available_target_pools)
     
     # Adjusts the 'authoredBy' section.
     authored_by = pipeline_json_config.get("authoredBy", {})
@@ -529,11 +616,9 @@ def adjust_pipeline_config(target_projects, pipeline_json_config, target_reposit
     pipeline_json_config["id"] = 0 # A place holder. Azure DevOps will assign a new id once the pipeline will be created.
     pipeline_json_config["url"] = f"{TARGET_ORGANIZATION}/{target_project_id}/_apis/build/Definitions/0?revision=1"
     pipeline_json_config["uri"] = "vstfs:///Build/Definition/0"
-    pipeline_json_config["path"] = "\\"  # Pipeline's location in the folder structure.
-    pipeline_json_config["type"] = 2
     pipeline_json_config["queueStatus"] = 0
     pipeline_json_config["revision"] = 1
-    pipeline_json_config["createdDate"] = datetime.utcnow().isoformat()  # Current timestamp in ISO 8601 format
+    pipeline_json_config["createdDate"] = datetime.utcnow().isoformat()
 
     # Adjusts the 'project' section.
     pipeline_json_config["project"] = {
@@ -559,6 +644,12 @@ def adjust_pipeline_config(target_projects, pipeline_json_config, target_reposit
         "href": f"{TARGET_ORGANIZATION}/{target_project_id}/_apis/build/status/{target_pipeline_id}"
     }
     
+    # Adjusts task groups.
+    pipeline_json_config = handle_task_groups(pipeline_json_config)
+
+    # Adjusts variable groups.
+    pipeline_json_config = handle_variable_groups(pipeline_json_config)
+
     # Adjusts service connections.
     source_service_connections = get_service_connections(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER)
     target_service_connections = get_service_connections(TARGET_ORGANIZATION, TARGET_PROJECT, TARGET_AUTHENTICATION_HEADER)
@@ -779,7 +870,7 @@ def migrate_pipelines(source_organization, target_organization, source_project, 
                 create_pipeline(TARGET_ORGANIZATION, TARGET_PROJECT, TARGET_AUTHENTICATION_HEADER, adjusted_pipeline_config)
 
             except Exception as e:
-                print(f"[ERROR] Failed during pipeline migration for '{pipeline_name}': {e}")
+                print(f"\033[1;31m[ERROR] Failed during pipeline migration for '{pipeline_name}': {e}\033[0m")
                 continue
 
 if __name__ == "__main__":

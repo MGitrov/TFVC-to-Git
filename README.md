@@ -30,6 +30,11 @@ A migration guide from a TFVC-based project to a Git-based project.
 ### **:four: Branches and History To Migrate**
   Understand what branches you have to migrate, as it will affect the amount of history that has to be migrated so all the branches will be migrated properly. It will also affect the amount of time needed for the migration to be completed.
 
+### **:five: Agent Pools Configuration**
+  * **Self-hosted agents:** Ensure that all necessary software, tools, and dependencies are installed and configured identically to the source environment. This is particularly important for specialized build requirements, custom tools, or specific software versions that the build pipelines depend on. Any misalignment in agent pool configuration could lead to build failures or unexpected behavior after migration.
+
+  * **Microsoft-hosted agents:** Verify that the target organization has the appropriate access level and quota to use these agents, as licensing and availability can affect the build pipeline execution capacity (parallel execution).
+
 # Getting Started :seedling:
 Once you have the prerequisites in place, follow these steps to perform the migration:
 ### :one: Processes Migration

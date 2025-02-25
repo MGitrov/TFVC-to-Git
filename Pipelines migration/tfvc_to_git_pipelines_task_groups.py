@@ -153,27 +153,32 @@ def prepare_migration_payload(task_group_data, id_mapping):
         if task_group_mapping and task.get('task', {}).get('definitionType') == 'metaTask':
             source_referenced_tg_id = task.get('task', {}).get('id') # The id of the referenced task group in the source environment.
             
-            # Check if we have a mapping for this task group ID
+            # Checks if there is a mapping for this task group id.
             if source_referenced_tg_id in id_mapping:
-                target_ref_id = id_mapping[source_referenced_tg_id]
+                target_referenced_tg_id = id_mapping[source_referenced_tg_id]
                 
-                print(f"\033[1;36m[INFO] Updating task group reference from {source_referenced_tg_id} to {target_ref_id}\033[0m")
+                print(f"\033[1;36m[INFO] Updating task group reference from {source_referenced_tg_id} to {target_referenced_tg_id}.\033[0m")
                 
-                # Update the task ID
-                task['task']['id'] = target_ref_id
+                # Updates the task group reference with the target environment id.
+                task['task']['id'] = target_referenced_tg_id
                 
-                # Update the taskGroup input if it exists
+                # The 'inputs.taskGroup' property contains additional configuration for how the referenced task group should be used, so we have to make sure this
+                # section is adjusted as well.
                 if 'inputs' in task and 'taskGroup' in task['inputs']:
                     try:
-                        # The taskGroup input is usually a JSON string
+                        # The "task['inputs']['taskGroup']" value is a JSON string, not a Python object, so we have to convert that string into a 
+                        # Python dictionary so we can manipulate it.
                         task_group_input = json.loads(task['inputs']['taskGroup'])
+
                         if 'id' in task_group_input:
-                            task_group_input['id'] = target_ref_id
-                            task['inputs']['taskGroup'] = json.dumps(task_group_input)
+                            task_group_input['id'] = target_referenced_tg_id
+                            task['inputs']['taskGroup'] = json.dumps(task_group_input) # Converts the Python object back to a JSON string because that is the format Azure DevOps expects.
+
                     except json.JSONDecodeError:
-                        print(f"\033[1;33m[WARNING] Could not parse taskGroup input for task in {task_group_data.get('name', 'unknown')}\033[0m")
+                        print(f"\033[1;33m[WARNING] Could not parse 'taskGroup' input for task in {task_group_data.get('name', 'unknown')}.\033[0m")
+
             else:
-                print(f"\033[1;33m[WARNING] No target mapping found for referenced task group ID: {source_referenced_tg_id}\033[0m")
+                print(f"\033[1;33m[WARNING] No target mapping found for referenced task group ID: {source_referenced_tg_id}.\033[0m")
     
     return migration_data
 
@@ -235,7 +240,7 @@ def manage_task_group_mapping(organization, project_name, authentication_header)
         return mapping_data
         
     except Exception as e:
-        print(f"[ERROR] Failed to create task groups mapping: {e}")
+        print(f"\033[1;31m[ERROR] Failed to create task groups mapping: {e}\033[0m")
         return None
 
 def identify_task_group_dependencies(task_group):
@@ -331,16 +336,8 @@ def migrate_task_groups(source_organization, source_project, source_authenticati
         dependencies = identify_task_group_dependencies(task_group)
         dependency_graph[task_group_id] = dependencies
 
-    #task_groups_mapping, source_task_groups = task_group_mapping()
-    #mapping_data = manage_task_group_mapping(source_organization, source_project, source_authentication_header)
-
-    #if not mapping_data:
-        #print("\033[1;31m[ERROR] Failed to create task group mapping system.\033[0m")
-        #return False
-
     migration_order = plan_migration_order(dependency_graph)
 
-    # Display planned migration order
     print("\n\033[1;38;5;38mPlanned Migration Order:\033[0m")
     for index, task_group_id in enumerate(migration_order, 1):
         task_group = task_group_lookup[task_group_id]
@@ -353,11 +350,11 @@ def migrate_task_groups(source_organization, source_project, source_authenticati
         else:
             print(f"{index} - {task_group['name']} (no dependencies)")
 
-    # Migration counter for summary
+    # Migration counter for summary.
     successful = 0
     failed = 0
 
-    # Migrate each task group in the determined order
+    # Migrates each task group in the determined order.
     for task_group_id in migration_order:
         source_task_group = task_group_lookup[task_group_id]
         
@@ -366,10 +363,9 @@ def migrate_task_groups(source_organization, source_project, source_authenticati
         print("" + "=" * 100)
         
         try:
-            # Prepare the task group for migration, updating any references
             cleaned_data = prepare_migration_payload(source_task_group, id_mapping)
             
-            # Create the task group in the target environment
+            # Creates the task group in the target environment.
             new_task_group = create_task_group(
                 target_organization,
                 target_project,
@@ -378,13 +374,14 @@ def migrate_task_groups(source_organization, source_project, source_authenticati
             )
             
             if new_task_group:
-                # Update our mapping immediately with the new ID
+                # Updates the mapping dictionary with the new id.
                 id_mapping[task_group_id] = new_task_group['id']
                 
                 successful += 1
                 print(f"\033[1;32m[SUCCESS] Task group migrated successfully.\033[0m")
                 print(f"[INFO] Source environment task group id: {task_group_id}")
                 print(f"[INFO] Target environment task group id: {new_task_group['id']}")
+                
             else:
                 failed += 1
                 print(f"\033[1;31m[ERROR] Failed to create task group '{source_task_group['name']}' in '{target_organization}'.\033[0m")

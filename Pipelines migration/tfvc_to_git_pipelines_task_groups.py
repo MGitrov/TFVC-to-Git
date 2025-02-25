@@ -381,7 +381,7 @@ def migrate_task_groups(source_organization, source_project, source_authenticati
                 print(f"\033[1;32m[SUCCESS] Task group migrated successfully.\033[0m")
                 print(f"[INFO] Source environment task group id: {task_group_id}")
                 print(f"[INFO] Target environment task group id: {new_task_group['id']}")
-                
+
             else:
                 failed += 1
                 print(f"\033[1;31m[ERROR] Failed to create task group '{source_task_group['name']}' in '{target_organization}'.\033[0m")
@@ -390,7 +390,6 @@ def migrate_task_groups(source_organization, source_project, source_authenticati
             failed += 1
             print(f"\033[1;31m[ERROR] An error occurred while migrating task group '{source_task_group['name']}': {e}\033[0m")
     
-    # Print migration summary
     print("\n" + "\033[1m=\033[0m" * 100)
     print("\033[1mMIGRATION SUMMARY\033[0m")
     print("\033[1m=\033[0m" * 100)

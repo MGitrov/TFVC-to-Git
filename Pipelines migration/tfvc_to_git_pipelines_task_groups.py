@@ -91,6 +91,24 @@ def get_task_groups(organization, project_name, authentication_header):
         print(f"[ERROR] An error occurred while fetching task groups: {e}")
         return []
 
+def task_group_mapping():
+    """
+    This function maps task groups between the source and target environments.
+    """
+    source_task_groups = get_task_groups(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER)
+    target_task_groups = get_task_groups(TARGET_ORGANIZATION, TARGET_PROJECT, TARGET_AUTHENTICATION_HEADER)
+    
+    # A lookup dictionary for target task groups by their name.
+    target_task_groups_lookup = {tg['name']: tg['id'] for tg in target_task_groups}
+    
+    task_groups_mapping = {}
+
+    for stg in source_task_groups:
+        if stg['name'] in target_task_groups_lookup:
+            task_groups_mapping[stg['id']] = target_task_groups_lookup[stg['name']]
+    
+    return task_groups_mapping, source_task_groups
+
 def clean_task_configuration(task):
     """
     This function ensures that irrelevant or incompatible fields are removed from the task’s configuration to ensure compatibility with target organization.
@@ -114,7 +132,7 @@ def process_task_inputs(task):
             if 'ConnectedServiceName' in input_name and input_value != '':
                 print(f"\033[1;38;5;214m[WARNING] Service connection reference found in task '{task.get('displayName')}': {input_value}\033[0m")
 
-def prepare_migration_payload(task_group_data):
+def prepare_migration_payload(task_group_data, id_mapping):
     """
     This function prepares task group data before migration by:
     • Creating a copy of the task group data to prevent modifying the original.
@@ -130,6 +148,32 @@ def prepare_migration_payload(task_group_data):
     for task in migration_data.get('tasks', []):
         clean_task_configuration(task)
         process_task_inputs(task)
+
+        # Checks if we have mapping data available and the current task is a reference to another task group.
+        if task_group_mapping and task.get('task', {}).get('definitionType') == 'metaTask':
+            source_referenced_tg_id = task.get('task', {}).get('id') # The id of the referenced task group in the source environment.
+            
+            # Check if we have a mapping for this task group ID
+            if source_referenced_tg_id in id_mapping:
+                target_ref_id = id_mapping[source_referenced_tg_id]
+                
+                print(f"\033[1;36m[INFO] Updating task group reference from {source_referenced_tg_id} to {target_ref_id}\033[0m")
+                
+                # Update the task ID
+                task['task']['id'] = target_ref_id
+                
+                # Update the taskGroup input if it exists
+                if 'inputs' in task and 'taskGroup' in task['inputs']:
+                    try:
+                        # The taskGroup input is usually a JSON string
+                        task_group_input = json.loads(task['inputs']['taskGroup'])
+                        if 'id' in task_group_input:
+                            task_group_input['id'] = target_ref_id
+                            task['inputs']['taskGroup'] = json.dumps(task_group_input)
+                    except json.JSONDecodeError:
+                        print(f"\033[1;33m[WARNING] Could not parse taskGroup input for task in {task_group_data.get('name', 'unknown')}\033[0m")
+            else:
+                print(f"\033[1;33m[WARNING] No target mapping found for referenced task group ID: {source_referenced_tg_id}\033[0m")
     
     return migration_data
 
@@ -197,10 +241,6 @@ def manage_task_group_mapping(organization, project_name, authentication_header)
 def identify_task_group_dependencies(task_group):
     """
     This function analyzes a task group and determines if it depends on other task groups within its steps.
-    This is specifically about task groups that are used as tasks within another task group, not about where the task group is referenced elsewhere.
-    
-    For example:
-    If task group A contains task group B as one of its steps, then task group B is a dependency of task group A.
     """
     dependencies = set()
     
@@ -214,7 +254,7 @@ def identify_task_group_dependencies(task_group):
     
     return list(dependencies)
 
-def plan_migration_order(mapping_data):
+def plan_migration_order(dependency_graph):
     """
     This function determines the correct order in which task groups should be migrated from the source environment to the target environment, ensuring 
     that dependencies between task groups are properly handled.
@@ -223,14 +263,6 @@ def plan_migration_order(mapping_data):
     If task group A contains task group B as one of its steps, then task group B is a dependency of task group A.
     If task group A depends on task group B, task group B must be migrated first.
     """
-    # Builds a dependency graph; what task group is a dependency of another task group.
-    dependency_graph = {}
-    
-    for task_group in mapping_data['source_task_groups']:
-        task_group_id = task_group['id']
-        dependencies = identify_task_group_dependencies(task_group)
-        dependency_graph[task_group_id] = dependencies
-    
     # Create the migration order using topological sort
     migration_order = []
     processed = set()
@@ -264,18 +296,6 @@ def plan_migration_order(mapping_data):
         if task_group_id not in processed:
             process_task_group(task_group_id)
     
-    print("\n\033[1;38;5;38mPlanned Migration Order:\033[0m")
-    for index, task_group_id in enumerate(migration_order, 1):
-        task_group = next(tg for tg in mapping_data['source_task_groups'] if tg['id'] == task_group_id)
-        dependencies = dependency_graph[task_group_id]
-
-        if dependencies:
-            dependency_names = [next(tg['name'] for tg in mapping_data['source_task_groups'] if tg['id'] == dep_id) for dep_id in dependencies]
-            print(f"{index} - {task_group['name']} (depends on: {', '.join(dependency_names)})")
-
-        else:
-            print(f"{index} - {task_group['name']} (no dependencies)")
-    
     return migration_order
 
 def update_task_group_mapping(mapping_data, source_task_group_id, target_task_group_id, status='completed'):
@@ -299,72 +319,90 @@ def migrate_task_groups(source_organization, source_project, source_authenticati
     print("\033[1mSTARTING TASK GROUP MIGRATION PROCESS\033[0m")
     print("\033[1m=\033[0m" * 100)
 
-    mapping_data = manage_task_group_mapping(source_organization, source_project, source_authentication_header)
+    id_mapping = {}
+    source_task_groups = get_task_groups(source_organization, source_project, source_authentication_header)
 
-    if not mapping_data:
-        print("\033[1;31m[ERROR] Failed to create task group mapping system.\033[0m")
-        return False
+    # A structure that maps task group IDs to their data.
+    task_group_lookup = {tg['id']: tg for tg in source_task_groups}
 
-    migration_order = plan_migration_order(mapping_data)
+    dependency_graph = {}
+    for task_group in source_task_groups:
+        task_group_id = task_group['id']
+        dependencies = identify_task_group_dependencies(task_group)
+        dependency_graph[task_group_id] = dependencies
 
+    #task_groups_mapping, source_task_groups = task_group_mapping()
+    #mapping_data = manage_task_group_mapping(source_organization, source_project, source_authentication_header)
+
+    #if not mapping_data:
+        #print("\033[1;31m[ERROR] Failed to create task group mapping system.\033[0m")
+        #return False
+
+    migration_order = plan_migration_order(dependency_graph)
+
+    # Display planned migration order
+    print("\n\033[1;38;5;38mPlanned Migration Order:\033[0m")
+    for index, task_group_id in enumerate(migration_order, 1):
+        task_group = task_group_lookup[task_group_id]
+        dependencies = dependency_graph[task_group_id]
+        
+        if dependencies:
+            dependency_names = [task_group_lookup[dep_id]['name'] for dep_id in dependencies]
+            print(f"{index} - {task_group['name']} (depends on: '{', '.join(dependency_names)}')")
+
+        else:
+            print(f"{index} - {task_group['name']} (no dependencies)")
+
+    # Migration counter for summary
+    successful = 0
+    failed = 0
+
+    # Migrate each task group in the determined order
     for task_group_id in migration_order:
-        source_task_group = next(tg for tg in mapping_data['source_task_groups'] if tg['id'] == task_group_id)
+        source_task_group = task_group_lookup[task_group_id]
         
         print("\n" + "=" * 100)
         print(f"\033[1;38;5;38mMigrating task group {source_task_group['name']}...\033[0m")
         print("" + "=" * 100)
-
+        
         try:
-            cleaned_data = prepare_migration_payload(source_task_group)
+            # Prepare the task group for migration, updating any references
+            cleaned_data = prepare_migration_payload(source_task_group, id_mapping)
+            
+            # Create the task group in the target environment
             new_task_group = create_task_group(
                 target_organization,
                 target_project,
                 cleaned_data,
                 target_authentication_header
             )
-
+            
             if new_task_group:
-                update_task_group_mapping(
-                    mapping_data,
-                    task_group_id,
-                    new_task_group['id'],
-                    'completed'
-                )
+                # Update our mapping immediately with the new ID
+                id_mapping[task_group_id] = new_task_group['id']
+                
+                successful += 1
                 print(f"\033[1;32m[SUCCESS] Task group migrated successfully.\033[0m")
                 print(f"[INFO] Source environment task group id: {task_group_id}")
                 print(f"[INFO] Target environment task group id: {new_task_group['id']}")
-
             else:
-                update_task_group_mapping(
-                    mapping_data,
-                    task_group_id,
-                    None,
-                    'failed'
-                )
+                failed += 1
                 print(f"\033[1;31m[ERROR] Failed to create task group '{source_task_group['name']}' in '{target_organization}'.\033[0m")
-
+        
         except Exception as e:
+            failed += 1
             print(f"\033[1;31m[ERROR] An error occurred while migrating task group '{source_task_group['name']}': {e}\033[0m")
-
-            update_task_group_mapping(
-                mapping_data,
-                task_group_id,
-                None,
-                'failed'
-            )
-
+    
+    # Print migration summary
     print("\n" + "\033[1m=\033[0m" * 100)
     print("\033[1mMIGRATION SUMMARY\033[0m")
     print("\033[1m=\033[0m" * 100)
-    
-    successful = sum(1 for info in mapping_data['name_mapping'].values() if info['migration_status'] == 'completed')
-    failed = sum(1 for info in mapping_data['name_mapping'].values() if info['migration_status'] == 'failed')
     
     print(f"• Total task groups processed: {len(migration_order)}")
     print(f"• Successful migration: {successful}")
     print(f"• Failed migrations: {failed}")
     
-    return mapping_data
+    return id_mapping
 
 if __name__ == "__main__":
     migrate_task_groups(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, TARGET_ORGANIZATION, TARGET_PROJECT, TARGET_AUTHENTICATION_HEADER)

@@ -91,24 +91,6 @@ def get_task_groups(organization, project_name, authentication_header):
         print(f"[ERROR] An error occurred while fetching task groups: {e}")
         return []
 
-def task_group_mapping():
-    """
-    This function maps task groups between the source and target environments.
-    """
-    source_task_groups = get_task_groups(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER)
-    target_task_groups = get_task_groups(TARGET_ORGANIZATION, TARGET_PROJECT, TARGET_AUTHENTICATION_HEADER)
-    
-    # A lookup dictionary for target task groups by their name.
-    target_task_groups_lookup = {tg['name']: tg['id'] for tg in target_task_groups}
-    
-    task_groups_mapping = {}
-
-    for stg in source_task_groups:
-        if stg['name'] in target_task_groups_lookup:
-            task_groups_mapping[stg['id']] = target_task_groups_lookup[stg['name']]
-    
-    return task_groups_mapping, source_task_groups
-
 def clean_task_configuration(task):
     """
     This function ensures that irrelevant or incompatible fields are removed from the task’s configuration to ensure compatibility with target organization.
@@ -150,7 +132,7 @@ def prepare_migration_payload(task_group_data, id_mapping):
         process_task_inputs(task)
 
         # Checks if we have mapping data available and the current task is a reference to another task group.
-        if task_group_mapping and task.get('task', {}).get('definitionType') == 'metaTask':
+        if id_mapping and task.get('task', {}).get('definitionType') == 'metaTask':
             source_referenced_tg_id = task.get('task', {}).get('id') # The id of the referenced task group in the source environment.
             
             # Checks if there is a mapping for this task group id.

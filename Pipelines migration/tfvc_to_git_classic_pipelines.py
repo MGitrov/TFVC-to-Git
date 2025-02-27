@@ -2,7 +2,6 @@ import os
 import base64
 import requests
 import json
-import yaml
 from datetime import datetime, UTC
 import re
 from dotenv import load_dotenv

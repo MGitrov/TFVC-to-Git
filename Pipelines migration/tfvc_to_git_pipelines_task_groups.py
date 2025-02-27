@@ -46,7 +46,7 @@ def get_project_id(organization, project_name, authentication_header):
         
         else:
             print(f"[ERROR] Failed to fetch project ID of '{project_name}' project.")
-            print(f"Request's Status Code: {response.status_code}")
+            print(f"[DEBUG] Request's Status Code: {response.status_code}")
             print(f"[DEBUG] Response Body: {response.text}")
             return None
     
@@ -83,7 +83,7 @@ def get_task_groups(organization, project_name, authentication_header):
         
         else:
             print(f"[ERROR] Failed to fetch task groups from '{project_name}' project.")
-            print(f"Request's Status Code: {response.status_code}")
+            print(f"[DEBUG] Request's Status Code: {response.status_code}")
             print(f"[DEBUG] Response: {response.text}")
             return []
         

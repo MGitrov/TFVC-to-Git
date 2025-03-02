@@ -3,6 +3,8 @@ import base64
 import requests
 import json
 from dotenv import load_dotenv
+import subprocess
+import twine
 
 load_dotenv()
 
@@ -275,12 +277,79 @@ def get_package_details(organization, project_name, authentication_header, feed_
         print(f"\033[1;31m[ERROR] Exception while getting package details: {str(e)}\033[0m")
         return None
 
+def upload_package(organization, project_name, target_pat, target_feed_id, package_paths, package_type="pypi"):
+    """
+    This function uploads a package to a feed.
+    """
+    if not package_paths:
+        print(f"\033[1;31m[ERROR] No package files to upload.\033[0m")
+        return False
+        
+    try:
+        package_type = package_type.lower() # Ensures the 'package_type' is lowercase for case-insensitive comparison.
+        
+        if package_type == "pypi":
+            """
+            • 'twine' handles all the complexities of preparing and uploading Python packages, including proper metadata formatting, package validation, and file handling.
+            • 'twine' verifies that the package is formatted correctly according to Python packaging standards.
+            • 'twine' manages authentication with the package repository.
+            • Using 'twine' is much simpler than implementing the equivalent functionality through the Azure DevOps' REST API, which would require understanding all 
+            the PyPI package upload protocols.
+            • For PyPI packages, Microsoft recommends using standard Python tools like 'twine' rather than their REST API directly.
+            """
+            upload_url = f"https://pkgs.dev.azure.com/{organization}/{project_name}/_packaging/{target_feed_id}/pypi/upload"
+            
+            # Create .pypirc file with credentials
+            pypirc_path = os.path.join(os.path.expanduser("~"), ".pypirc")
+
+            with open(pypirc_path, "w") as f:
+                f.write(f"""[distutils]
+index-servers = azure
+
+[azure]
+repository = {upload_url}
+username = azure
+password = {target_pat}
+""")
+            
+            # Upload each package file using twine
+            success = True
+            for package_path in package_paths:
+                print(f"[INFO] Uploading {os.path.basename(package_path)} to target feed...")
+                result = subprocess.run(
+                    ["twine", "upload", "--repository", "azure", package_path],
+                    capture_output=True,
+                    text=True
+                )
+                
+                if result.returncode == 0:
+                    print(f"✅[INFO] Successfully uploaded {os.path.basename(package_path)} to target feed")
+                else:
+                    print(f"\033[1;31m❌[ERROR] Failed to upload {os.path.basename(package_path)} to target feed\033[0m")
+                    print(f"[DEBUG] STDOUT: {result.stdout}")
+                    print(f"[DEBUG] STDERR: {result.stderr}")
+                    success = False
+            
+            # Clean up .pypirc file
+            if os.path.exists(pypirc_path):
+                os.remove(pypirc_path)
+            
+            return success
+        
+        else:
+            print(f"\033[1;31m❌[ERROR] Unsupported package type: {package_type}\033[0m")
+            return False
+            
+    except Exception as e:
+        print(f"\033[1;31m❌[ERROR] Exception while uploading package: {str(e)}\033[0m")
+        return False
+
 if __name__ == "__main__":
     source_feeds = get_feeds(SOURCE_ORGANIZATION_FEEDS, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER)
+    target_feeds = get_feeds(TARGET_ORGANIZATION_FEEDS, TARGET_PROJECT, TARGET_AUTHENTICATION_HEADER)
 
     for feed in source_feeds:
         feed_id = feed['id']
-        #get_feed_config(SOURCE_ORGANIZATION_FEEDS, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, feed_id)
         feed_packages = get_feed_packages(SOURCE_ORGANIZATION_FEEDS, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, feed_id)
 
         for package in feed_packages:
@@ -292,6 +361,8 @@ if __name__ == "__main__":
             for version in package_versions:
                 version_id = version['id']
                 version_number = version.get("normalizedVersion", "Unknown Version")
-                download_package_version(SOURCE_ORGANIZATION_FEEDS, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, feed_id, package_name, version_number, version_id, package_protocol_type, '/Users/pyruc/Desktop/TFVC-to-Git')
-                #get_package_details(SOURCE_ORGANIZATION_FEEDS, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, feed_id, package_id, version_id)
-            
+                downloaded_files = download_package_version(SOURCE_ORGANIZATION_FEEDS, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, feed_id, package_name, version_number, version_id, package_protocol_type, '/Users/pyruc/Desktop/TFVC-to-Git')
+                
+                for tf in target_feeds:
+                    tf_id = tf['id']
+                    upload_package(TARGET_ORGANIZATION_FEEDS, TARGET_PROJECT, TARGET_PAT, tf_id, downloaded_files, package_protocol_type)

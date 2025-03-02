@@ -277,7 +277,7 @@ def get_package_details(organization, project_name, authentication_header, feed_
         print(f"\033[1;31m[ERROR] Exception while getting package details: {str(e)}\033[0m")
         return None
 
-def upload_package(organization, project_name, target_pat, target_feed_id, package_paths, package_type="pypi"):
+def upload_package(organization, project_name, target_pat, target_feed_id, package_paths, package_type, package_name):
     """
     This function uploads a package to a feed.
     """
@@ -287,6 +287,8 @@ def upload_package(organization, project_name, target_pat, target_feed_id, packa
         
     try:
         package_type = package_type.lower() # Ensures the 'package_type' is lowercase for case-insensitive comparison.
+        
+        print(f"[INFO] Uploading package '{package_name}' to target feed...")
         
         if package_type == "pypi":
             """
@@ -299,7 +301,7 @@ def upload_package(organization, project_name, target_pat, target_feed_id, packa
             """
             upload_url = f"https://pkgs.dev.azure.com/{organization}/{project_name}/_packaging/{target_feed_id}/pypi/upload"
             
-            # Create .pypirc file with credentials
+            # Creates the '.pypirc' file to be used by 'twine'.
             pypirc_path = os.path.join(os.path.expanduser("~"), ".pypirc")
 
             with open(pypirc_path, "w") as f:
@@ -312,10 +314,12 @@ username = azure
 password = {target_pat}
 """)
             
-            # Upload each package file using twine
             success = True
+
             for package_path in package_paths:
                 print(f"[INFO] Uploading {os.path.basename(package_path)} to target feed...")
+
+                # Executes the uploading command using CLI.
                 result = subprocess.run(
                     ["twine", "upload", "--repository", "azure", package_path],
                     capture_output=True,
@@ -323,25 +327,30 @@ password = {target_pat}
                 )
                 
                 if result.returncode == 0:
-                    print(f"✅[INFO] Successfully uploaded {os.path.basename(package_path)} to target feed")
+                    print(f"\033[1;32m[SUCCESS] Successfully uploaded {os.path.basename(package_path)} to target feed.\033[0m")
+
                 else:
-                    print(f"\033[1;31m❌[ERROR] Failed to upload {os.path.basename(package_path)} to target feed\033[0m")
+                    print(f"\033[1;31m[ERROR] Failed to upload {os.path.basename(package_path)} to target feed.\033[0m")
                     print(f"[DEBUG] STDOUT: {result.stdout}")
                     print(f"[DEBUG] STDERR: {result.stderr}")
                     success = False
             
-            # Clean up .pypirc file
+            # Cleans up the '.pypirc' file created earlier.
             if os.path.exists(pypirc_path):
                 os.remove(pypirc_path)
             
             return success
         
+        # Once there will be information about other package types, the logic will be adjusted.
+        elif package_type == "nuget":
+            pass
+
         else:
-            print(f"\033[1;31m❌[ERROR] Unsupported package type: {package_type}\033[0m")
+            print(f"\033[1;31m[ERROR] Unsupported package type: '{package_type}'.\033[0m")
             return False
             
     except Exception as e:
-        print(f"\033[1;31m❌[ERROR] Exception while uploading package: {str(e)}\033[0m")
+        print(f"\033[1;31m[ERROR] An error occurred while uploading package '{package_name}': {e}\033[0m")
         return False
 
 if __name__ == "__main__":

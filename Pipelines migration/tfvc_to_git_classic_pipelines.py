@@ -644,7 +644,7 @@ def handle_service_connections(pipeline_json_config):
 
     return pipeline_json_config
 
-def adjust_pipeline_config(pipeline_json_config, git_details): # REVIEW.
+def adjust_pipeline_config(pipeline_json_config, git_details):
     """
     This function adjusts the pipeline configuration file to use Git as the source.
     """

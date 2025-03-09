@@ -272,7 +272,7 @@ def download_package_version(organization, project_name, authentication_header, 
 
 def get_package_details(organization, project_name, authentication_header, feed_id, package_id, version_id):
     """
-    Get detailed information about a package version, including available file names.
+    This function fetches the configuration of a package.
     """
     api_version = "6.0-preview"
     url = f"https://feeds.dev.azure.com/{organization}/{project_name}/_apis/packaging/feeds/{feed_id}/packages/{package_id}/versions/{version_id}?api-version={api_version}"
@@ -281,14 +281,16 @@ def get_package_details(organization, project_name, authentication_header, feed_
         response = requests.get(url, headers=authentication_header)
         
         if response.status_code == 200:
-            #print(f"\n{response.json()}\n")
             return response.json()
+        
         else:
-            print(f"\033[1;31m[ERROR] Failed to get package details. Status Code: {response.status_code}\033[0m")
+            print(f"\033[1;31m[ERROR] Failed to get package details.\033[0m")
+            print(f"[DEBUG] Request's Status Code: {response.status_code}")
             print(f"[DEBUG] Response: {response.text}")
             return None
+        
     except Exception as e:
-        print(f"\033[1;31m[ERROR] Exception while getting package details: {str(e)}\033[0m")
+        print(f"\033[1;31m[ERROR] An error occurred while fetching package details: {e}\033[0m")
         return None
 
 def upload_package(organization, project_name, target_pat, target_feed_id, package_paths, package_type, package_name):

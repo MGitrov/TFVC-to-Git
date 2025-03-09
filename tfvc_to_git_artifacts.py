@@ -4,13 +4,15 @@ import requests
 import json
 from dotenv import load_dotenv
 import subprocess
+import re
+import time
 import twine
 
 load_dotenv()
 
 SOURCE_ORGANIZATION=os.getenv("SOURCE_ORGANIZATION")
-SOURCE_PROJECT=os.getenv("SOURCE_PROJECT")
-SOURCE_PAT = os.getenv("SOURCE_PAT")
+SOURCE_PROJECT="Cayuga"#os.getenv("SOURCE_PROJECT")
+SOURCE_PAT = "FfyolvVvPsdp7r4JQB9jdY1RxZX1cablwAuCdMh9MJSHGGbMgRyoJQQJ99BCACAAAAA67SVyAAASAZDOv4Mx"#os.getenv("SOURCE_PAT")
 
 TARGET_ORGANIZATION=os.getenv("TARGET_ORGANIZATION")
 TARGET_PROJECT=os.getenv("TARGET_PROJECT")
@@ -208,7 +210,7 @@ def download_package_version(organization, project_name, authentication_header, 
 
     # Checks if the package has files.
     if not package_details or 'files' not in package_details or not package_details['files']:
-        print(f"\033[1;31m[ERROR] No files found for package '{package_name}' for version '{package_version}'.\033[0m")
+        print(f"\033[1;31m[ERROR] No files found for package '{package_name}' in version '{package_version}'.\033[0m")
         return []
 
     package_type = protocol_type.lower() # Ensures the 'package_type' is lowercase for case-insensitive comparison.
@@ -227,7 +229,19 @@ def download_package_version(organization, project_name, authentication_header, 
 
         # Once there will be information about other package types, the logic will be adjusted.
         elif package_type == "nuget":
+            #https://dev.azure.com/Qognify/Cayuga/_artifacts/feed/Cayuga/NuGet/Qognify.CefSharp.Common/overview/119.4.32#:~:text=Download
             pass
+
+        elif package_type == "maven":
+            # For Maven, the package name is typically in format 'groupId:artifactId'.
+            if ':' in package_name:
+                group_id, artifact_id = package_name.split(':')
+                #group_id_path = group_id.replace('.', '/') # Replace dots with forward slashes in group id as per Maven convention.
+                download_url = f"https://pkgs.dev.azure.com/{organization}/{project_name}/_apis/packaging/feeds/{feed_id}/maven/{group_id}/{artifact_id}/{package_version}/{filename}/content"
+                
+            else:
+                print(f"\033[1;31m[ERROR] Invalid Maven package name format for '{package_name}'. Expected format: 'groupId:artifactId'.\033[0m")
+                continue
 
         download_path = os.path.join(download_directory, filename)
         
@@ -242,18 +256,18 @@ def download_package_version(organization, project_name, authentication_header, 
                     for chunk in response.iter_content(chunk_size=8192): # This approach prevents memory issues when downloading large files.
                         f.write(chunk)
 
-                print(f"✅[INFO] Successfully downloaded the '{filename}' file from the '{package_name}' package to '{download_path}'.")
+                print(f"[INFO] Successfully downloaded the '{filename}' file from the '{package_name} ({package_version})' package to '{download_path}'.")
                 downloaded_files.append(download_path)
             
             else:
-                print(f"\033[1;31m❌[ERROR] Failed to download the '{filename}' file from the '{package_name}' package.\033[0m")
+                print(f"\033[1;31m[ERROR] Failed to download the '{filename}' file from the '{package_name} ({package_version})' package.\033[0m")
                 print(f"[DEBUG] Request's Status Code: {response.status_code}")
                 print(f"[DEBUG] Response: {response.text}")
             
         except Exception as e:
             print(f"\033[1;31m[ERROR] Exception while downloading package version: {str(e)}\033[0m")
 
-    print(f"✅[INFO] Successfully downloaded the '{package_name}' package.")
+    print(f"[INFO] Successfully downloaded the '{package_name}' package in version {package_version}.")
     return downloaded_files
 
 def get_package_details(organization, project_name, authentication_header, feed_id, package_id, version_id):
@@ -287,7 +301,7 @@ def upload_package(organization, project_name, target_pat, target_feed_id, packa
         
     try:
         package_type = package_type.lower() # Ensures the 'package_type' is lowercase for case-insensitive comparison.
-        
+
         print(f"[INFO] Uploading package '{package_name}' to target feed...")
         
         if package_type == "pypi":
@@ -342,6 +356,226 @@ password = {target_pat}
             return success
         
         # Once there will be information about other package types, the logic will be adjusted.
+        elif package_type == "maven":
+            """
+            For Maven packages, the 'mvn deploy' command is used to upload the package.
+            """
+            # Creates the 'settings.xml' file to be used by 'mvn'.
+            maven_settings_path = os.path.join(os.path.expanduser("~"), ".m2", "settings.xml")
+            os.makedirs(os.path.dirname(maven_settings_path), exist_ok=True)
+            
+            with open(maven_settings_path, "w") as f:
+                f.write(f"""<settings>
+    <servers>
+        <server>
+            <id>azure-feed</id>
+            <username>azure</username>
+            <password>{target_pat}</password>
+        </server>
+    </servers>
+</settings>""")
+            
+            success = True
+    
+            if ':' in package_name:
+                group_id, artifact_id = package_name.split(':')
+
+            else:
+                print(f"\033[1;31m[ERROR] Invalid Maven package name format for '{package_name}'. Expected format: 'groupId:artifactId'.\033[0m")
+                return False
+            
+            # Identifies the JAR and POM files needed for Maven deployment.
+            main_jar_file = None
+            sources_jar_file = None
+            javadoc_jar_file = None
+            pom_file = None
+            
+            for package_path in package_paths:
+                file_name = os.path.basename(package_path)
+                
+                # Skips checksum files.
+                if file_name.endswith('.sha256') or file_name.endswith('.sha512'):
+                    continue
+                    
+                # Identifies different types of files.
+                if file_name.endswith('.pom'):
+                    pom_file = package_path
+
+                elif file_name.endswith('-sources.jar'):
+                    sources_jar_file = package_path
+
+                elif file_name.endswith('-javadoc.jar'):
+                    javadoc_jar_file = package_path
+
+                elif file_name.endswith('.jar'):
+                    main_jar_file = package_path
+
+            # Prioritizes the JAR file if available, otherwise uses the available alternatives.
+            jar_file = main_jar_file or sources_jar_file or javadoc_jar_file
+
+            if not jar_file or not pom_file:
+                print(f"\033[1;31m[ERROR] Both JAR and POM files are required for Maven package upload.\033[0m")
+                return False
+            
+            # Extracts the package version using a multi-layered approach.
+            if main_jar_file:
+                file_name = os.path.basename(main_jar_file)
+
+            elif sources_jar_file:
+                file_name = os.path.basename(sources_jar_file)
+                file_name = file_name.replace("-sources.jar", ".jar")
+
+            else:
+                file_name = os.path.basename(pom_file)
+
+            # First attempt: Tries to extract the package version from filename using regex.
+            version_pattern = re.compile(f"{artifact_id}-(.*)\\.jar")
+            match = version_pattern.match(file_name)
+
+            if match:
+                version = match.group(1)
+
+            else:
+                # Second attempt: Tries to extract the package version using a more generic pattern (any numbers with dots).
+                generic_pattern = re.compile(r"(\d+(\.\d+)+)")
+                match = generic_pattern.search(file_name)
+                
+                if match:
+                    version = match.group(1)
+
+                else:
+                    # Third attempt: Tries to extract the package version from POM file content.
+                    try:
+                        with open(pom_file, 'r') as f:
+                            pom_content = f.read()
+                            version_in_pom = re.search(r"<version>(.*?)</version>", pom_content)
+
+                            if version_in_pom:
+                                version = version_in_pom.group(1)
+
+                            else:
+                                # Last attempt: falls back to a default version if all other methods fail.
+                                print(f"\033[1;38;5;214m[WARNING] Could not determine the package version from filenames, using default version '1.0'.\033[0m")
+                                version = "1.0"
+
+                    except Exception as e:
+                        print(f"\033[1;38;5;214m[WARNING] Error reading the POM file: {e}. Using default version '1.0'.\033[0m")
+                        version = "1.0"
+
+            print(f"[INFO] Detected version: {version}")
+            print(f"[INFO] Uploading the '{package_name}' package in version {version} to target feed...")
+            
+            upload_url = f"https://pkgs.dev.azure.com/{organization}/{project_name}/_packaging/{target_feed_id}/maven/v1"
+            
+            # Uploads the main JAR (compiled code) file.
+            if main_jar_file:
+                print(f"[INFO] Uploading the main JAR file for '{package_name}' package in version {version} to target feed...")
+
+                main_cmd = [
+                    "mvn", "deploy:deploy-file",
+                    "-DgroupId=" + group_id,
+                    "-DartifactId=" + artifact_id,
+                    "-Dversion=" + version,
+                    "-Dpackaging=jar",
+                    "-Dfile=" + main_jar_file,
+                    "-DpomFile=" + pom_file,
+                    "-DrepositoryId=azure-feed",
+                    "-Durl=" + upload_url,
+                    "-s", maven_settings_path
+                ]
+                
+                result = subprocess.run(
+                    main_cmd,
+                    capture_output=True,
+                    text=True
+                )
+                
+                if result.returncode == 0:
+                    print(f"\033[1;32m[SUCCESS] Successfully uploaded the main JAR file for '{package_name}' package in version {version} to target feed.\033[0m")
+
+                else:
+                    print(f"\033[1;31m[ERROR] Failed to upload the main JAR file for '{package_name}' package in version {version} to target feed.\033[0m")
+                    print(f"[DEBUG] STDOUT: {result.stdout}")
+                    print(f"[DEBUG] STDERR: {result.stderr}")
+                    success = False
+
+            # Uploads the sources JAR (source code) file if available.
+            if sources_jar_file and success:
+                time.sleep(2)
+                print(f"[INFO] Uploading the sources JAR file for '{package_name}' package in version {version} to target feed...")
+
+                sources_cmd = [
+                    "mvn", "deploy:deploy-file",
+                    "-DgroupId=" + group_id,
+                    "-DartifactId=" + artifact_id,
+                    "-Dversion=" + version,
+                    "-Dpackaging=jar",
+                    "-Dfile=" + sources_jar_file,
+                    "-Dclassifier=sources",
+                    "-DrepositoryId=azure-feed",
+                    "-Durl=" + upload_url,
+                    "-s", maven_settings_path
+                ]
+                
+                if not main_jar_file:
+                    sources_cmd.append("-DpomFile=" + pom_file)
+                
+                result = subprocess.run(sources_cmd, capture_output=True, text=True)
+                
+                if result.returncode == 0:
+                    print(f"\033[1;32m[SUCCESS] Successfully uploaded the sources JAR file for '{package_name}' package in version {version} to target feed.\033[0m")
+
+                else:
+                    print(f"\033[1;38;5;214m[WARNING] Failed to upload the sources JAR file for '{package_name}' package in version {version} to target feed.\033[0m")
+                    print(f"[DEBUG] STDOUT: {result.stdout}")
+                    print(f"[DEBUG] STDERR: {result.stderr}")
+
+            # Uploads the javadoc JAR (documentation) file if available.
+            if javadoc_jar_file and success:
+                time.sleep(2)
+                print(f"[INFO] Uploading the javadoc JAR file for '{package_name}' package in version {version} to target feed...")
+
+                javadoc_cmd = [
+                    "mvn", "deploy:deploy-file",
+                    "-DgroupId=" + group_id,
+                    "-DartifactId=" + artifact_id,
+                    "-Dversion=" + version,
+                    "-Dpackaging=jar",
+                    "-Dfile=" + javadoc_jar_file,
+                    "-Dclassifier=javadoc",
+                    "-DrepositoryId=azure-feed",
+                    "-Durl=" + upload_url,
+                    "-s", maven_settings_path
+                ]
+                
+                if not main_jar_file:
+                    sources_cmd.append("-DpomFile=" + pom_file)
+
+                result = subprocess.run(javadoc_cmd, capture_output=True, text=True)
+                
+                if result.returncode == 0:
+                    print(f"\033[1;32m[SUCCESS] Successfully uploaded the javadoc JAR file for '{package_name}' package in version {version} to target feed.\033[0m")
+
+                else:
+                    print(f"\033[1;38;5;214m[WARNING] Failed to upload the sources JAR file for '{package_name}' package in version {version} to target feed.\033[0m")
+                    print(f"[DEBUG] STDOUT: {result.stdout}")
+                    print(f"[DEBUG] STDERR: {result.stderr}")
+            
+            # Cleans up the 'settings.xml' file created earlier.
+            if os.path.exists(maven_settings_path):
+                os.remove(maven_settings_path)
+            
+            if success:
+                print(f"\033[1;32m[SUCCESS] Successfully uploaded the '{package_name}' package in version {version} to target feed.\033[0m")
+
+            else:
+                print(f"\033[1;31m[ERROR] Failed to upload the '{package_name}' package in version {version} to target feed.\033[0m")
+                print(f"\033[1m[INFO] The failure might occur because the main JAR file is already exists in the target feed.\033[0m\n")
+                print(f"[DEBUG] STDOUT: {result.stdout}")
+                print(f"[DEBUG] STDERR: {result.stderr}")
+
+            return success
+
         elif package_type == "nuget":
             pass
 
@@ -354,24 +588,35 @@ password = {target_pat}
         return False
 
 if __name__ == "__main__":
-    source_feeds = get_feeds(SOURCE_ORGANIZATION_FEEDS, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER)
+    source_feeds = get_feeds('Qognify', SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER)
     target_feeds = get_feeds(TARGET_ORGANIZATION_FEEDS, TARGET_PROJECT, TARGET_AUTHENTICATION_HEADER)
 
     for feed in source_feeds:
         feed_id = feed['id']
-        feed_packages = get_feed_packages(SOURCE_ORGANIZATION_FEEDS, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, feed_id)
+        feed_packages = get_feed_packages('Qognify', SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, feed_id)
 
         for package in feed_packages:
             package_id = package['id']
             package_name = package['name']
+            print(f"Package: {package_name}") 
             package_protocol_type = package['protocolType']
-            package_versions = get_package_versions(SOURCE_ORGANIZATION_FEEDS, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, feed_id, package_id)
+            package_versions = get_package_versions('Qognify', SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, feed_id, package_id)
 
-            for version in package_versions:
-                version_id = version['id']
-                version_number = version.get("normalizedVersion", "Unknown Version")
-                downloaded_files = download_package_version(SOURCE_ORGANIZATION_FEEDS, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, feed_id, package_name, version_number, version_id, package_protocol_type, '/Users/pyruc/Desktop/TFVC-to-Git')
-                
-                for tf in target_feeds:
-                    tf_id = tf['id']
-                    upload_package(TARGET_ORGANIZATION_FEEDS, TARGET_PROJECT, TARGET_PAT, tf_id, downloaded_files, package_protocol_type)
+            if package_name == "seetec:shared":
+                for version in package_versions:
+                    version_id = version['id']
+                    version_number = version.get("normalizedVersion", "Unknown Version")
+                    print(f"Version: {version_number}")
+                    downloaded_files = download_package_version('Qognify', SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, feed_id, package_name, version_number, version_id, package_protocol_type, '/Users/pyruc/Desktop/TFVC-to-Git/seetec:shared')
+                #get_package_details('Qognify', SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, feed_id, package_id, version_id)
+                #break
+            #break
+        #break
+                    for tf in target_feeds:
+                        tf_id = tf['id']
+                        upload_package(TARGET_ORGANIZATION_FEEDS, TARGET_PROJECT, TARGET_PAT, tf_id, downloaded_files, package_protocol_type, package_name)
+                        break
+                    #break
+                #break
+            #break
+        #break

@@ -218,8 +218,6 @@ def download_package_version(organization, project_name, authentication_header, 
 
     # NuGet packages requires special handling as they are downloaded using the 'nuget' CLI tool.
     if package_type == "nuget":
-        print(f"[INFO] Downloading NuGet package '{package_name}' in version '{package_version}'...")
-        
         # Creates the 'NuGet.config' file to be used by 'nuget'.
         nuget_config_path = os.path.join(os.path.expanduser("~"), "NuGet.Config")
         feed_url = f"https://pkgs.dev.azure.com/{organization}/{project_name}/_packaging/{feed_id}/nuget/v3/index.json"
@@ -344,7 +342,6 @@ def get_package_details(organization, project_name, authentication_header, feed_
         response = requests.get(url, headers=authentication_header)
         
         if response.status_code == 200:
-            print(f"\n{response.json()}\n")
             return response.json()
         
         else:
@@ -367,8 +364,6 @@ def upload_package(organization, project_name, target_pat, target_feed_id, packa
         
     try:
         package_type = package_type.lower() # Ensures the 'package_type' is lowercase for case-insensitive comparison.
-
-        print(f"[INFO] Uploading package '{package_name}' to target feed...")
         
         if package_type == "pypi":
             """
@@ -818,36 +813,35 @@ def migrate_packages(source_organization, source_project, source_headers, target
     migrate_all_versions = migrate_all_versions != 'n'  # Defaults to True if not explicitly 'n'.
     
     print("\n" + "\033[1m=\033[0m" * 100)
-    print("\033[1mMIGRATION SUMMARY\033[0m")
+    print("\033[1mMIGRATION SUMMARY\n\033[0m")
     print(f"• Source environment: {source_organization}/{source_project} | Feed: {source_feed.get('name')}")
     print(f"• Target environment: {target_organization}/{target_project} | Feed: {target_feed.get('name')}")
     print(f"• Packages to migrate: {len(selected_packages)}")
     print("\033[1m=\033[0m" * 100)
     
     confirmation = input("\n[USER INPUT] Proceed with the migration? (y/n): ").lower()
-    
+
     if confirmation != 'y':
         print("Migration aborted by user.")
         return
     
-    # Step 6: Create temp directory for package download
-    temp_dir = os.path.join(os.getcwd(), "temp_packages")
-    os.makedirs(temp_dir, exist_ok=True)
+    # Creates local temporary directory for package download.
+    temp_dir = os.path.join(os.getcwd(), "downloaded_packages")
+    #os.makedirs(temp_dir, exist_ok=True) # Creates a download directory if it does not exist.
 
-    # Step 8: Process each selected package
+    # Migration counter for summary.
     successful_migrations = 0
     total_versions = 0
     
     for package in selected_packages:
         package_name = package.get('name')
         package_id = package.get('id')
-        protocol_type = package.get('protocolType')
+        package_protocol_type = package.get('protocolType')
         
-        print(f"\n{'=' * 60}")
-        print(f"Processing package: {package_name} (Type: {protocol_type})")
+        print(f"\n{'=' * 100}")
+        print(f"Migrating package '{package_name}' (type: {package_protocol_type})...")
         
-        # Get package versions using the provided function
-        versions = get_package_versions(
+        package_versions = get_package_versions(
             source_organization,
             source_project,
             source_headers,
@@ -855,23 +849,23 @@ def migrate_packages(source_organization, source_project, source_headers, target
             package_id
         )
         
-        if not versions:
-            print(f"\033[1;31m[ERROR] No versions found for package '{package_name}'.\033[0m")
+        if not package_versions:
+            print(f"\033[1;31m[ERROR] No versions found for package '{package_name}'; moving to the next package\033[0m")
             continue
             
-        # Determine which versions to migrate
-        versions_to_migrate = versions
+        # Determines which versions to migrate.
+        versions_to_migrate = package_versions
+
         if not migrate_all_versions:
-            # Find the latest version
             latest_version = None
-            for version in versions:
+
+            for version in package_versions:
                 if version.get("isLatest", False):
                     latest_version = version
                     break
             
-            # If no version is marked as latest, use the first one
-            if not latest_version and versions:
-                latest_version = versions[0]
+            if not latest_version and package_versions:
+                latest_version = package_versions[0]
                 
             if not latest_version:
                 print(f"\033[1;31m[ERROR] Could not determine latest version for package '{package_name}'.\033[0m")
@@ -879,23 +873,21 @@ def migrate_packages(source_organization, source_project, source_headers, target
                 
             versions_to_migrate = [latest_version]
         
-        print(f"Migrating {len(versions_to_migrate)} version(s) of package '{package_name}'")
+        print(f"Migrating {len(versions_to_migrate)} version(s) of package '{package_name}'...")
         total_versions += len(versions_to_migrate)
         
-        # Process each version
         for version in versions_to_migrate:
             version_str = version.get("normalizedVersion", version.get("version"))
             version_id = version.get("id")
             
-            print(f"\n{'-' * 40}")
-            print(f"Processing version: {version_str}")
+            print(f"\n{'-' * 50}")
+            print(f"Processing version '{version_str}'...")
             
-            # Create package-specific directory
-            pkg_dir = os.path.join(temp_dir, package_name, version_str)
-            os.makedirs(pkg_dir, exist_ok=True)
+            package_directory = os.path.join(temp_dir, package_name, version_str)
+            #os.makedirs(pkg_dir, exist_ok=True)
             
-            # Download the package
-            print(f"Downloading package '{package_name}' version '{version_str}'...")
+            print(f"Downloading the '{package_name}' package in version '{version_str}'...")
+
             downloaded_files = download_package_version(
                 source_organization, 
                 source_project, 
@@ -905,16 +897,15 @@ def migrate_packages(source_organization, source_project, source_headers, target
                 package_name, 
                 version_str,
                 version_id, 
-                protocol_type, 
-                pkg_dir
+                package_protocol_type, 
+                package_directory
             )
             
             if not downloaded_files:
-                print(f"\033[1;31m[ERROR] Failed to download version '{version_str}' of package '{package_name}'.\033[0m")
+                print(f"\033[1;31m[ERROR] Failed to download version '{version_str}' of the '{package_name}' package; moving to the next version\033[0m")
                 continue
         
-            # Upload the package to target feed
-            print(f"Uploading package '{package_name}' to target feed...")
+            print(f"Uploading the '{package_name}' package to target feed...")
             
             upload_success = upload_package(
                 target_organization, 
@@ -922,23 +913,24 @@ def migrate_packages(source_organization, source_project, source_headers, target
                 TARGET_PAT,
                 target_feed.get('id'), 
                 downloaded_files, 
-                protocol_type, 
+                package_protocol_type, 
                 package_name
             )
         
         if upload_success:
             successful_migrations += 1
-            print(f"\033[1;32m[SUCCESS] Package '{package_name}' successfully migrated.\033[0m")
+            print(f"\n\033[1;32m[SUCCESS] Package '{package_name}' has been successfully migrated.\033[0m")
+
         else:
-            print(f"\033[1;31m[ERROR] Failed to upload package '{package_name}' to target feed.\033[0m")
+            print(f"\n\033[1;31m[ERROR] Failed to migrate package '{package_name}' to target feed.\033[0m")
     
-    # Step 8: Cleanup and summary
-    print("\nCleaning up temporary files...")
+    print("\nCleaning up temporary files and directories...")
     shutil.rmtree(temp_dir, ignore_errors=True)
     
-    print(f"\n{'=' * 60}")
-    print(f"Migration complete. Successfully migrated {successful_migrations} out of {len(selected_packages)} package(s).")
-    print(f"{'=' * 60}")
+    print("\n" + "\033[1m=\033[0m" * 100)
+    print(f"\033[1mMIGRATION COMPLETED!\n\033[0m")
+    print(f"Successfully migrated {successful_migrations} out of {len(selected_packages)} package(s).")
+    print("\033[1m=\033[0m" * 100)
 
 if __name__ == "__main__":
     migrate_packages('Qognify', SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, TARGET_ORGANIZATION_FEEDS, TARGET_PROJECT, TARGET_AUTHENTICATION_HEADER)

@@ -809,6 +809,7 @@ def migrate_packages(source_organization, source_project, source_headers, target
         except ValueError:
             print(f"Please enter a number between 1 and {len(target_feeds)}.")
 
+    print("\n\033[1;33mIt is recommended to migrate all versions as there might be dependencies between different package versions.\033[0m")
     migrate_all_versions = input("\n[USER INPUT] Migrate all versions of each package? (y/n - default: y): ").lower()
     migrate_all_versions = migrate_all_versions != 'n'  # Defaults to True if not explicitly 'n'.
     

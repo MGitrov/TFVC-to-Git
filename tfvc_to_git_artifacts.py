@@ -1,4 +1,5 @@
 import os
+import shutil
 import base64
 import requests
 import json
@@ -6,6 +7,7 @@ from dotenv import load_dotenv
 import subprocess
 import re
 import time
+import pyfiglet
 import twine
 
 load_dotenv()
@@ -202,7 +204,7 @@ def get_package_versions(organization, project_name, authentication_header, feed
         print(f"\033[1;31m[ERROR] An error occurred while fetching package versions: {e}\033[0m")
         return None
 
-def download_package_version(organization, project_name, authentication_header, feed_id, package_name, package_version, version_id, protocol_type, download_directory):
+def download_package_version(organization, project_name, authentication_header, feed_id, package_id, package_name, package_version, version_id, protocol_type, download_directory):
     """
     This function downloads a specific package version.
     """
@@ -342,6 +344,7 @@ def get_package_details(organization, project_name, authentication_header, feed_
         response = requests.get(url, headers=authentication_header)
         
         if response.status_code == 200:
+            print(f"\n{response.json()}\n")
             return response.json()
         
         else:
@@ -706,11 +709,12 @@ password = {target_pat}
         print(f"\033[1;31m[ERROR] An error occurred while uploading package '{package_name}': {e}\033[0m")
         return False
 
-def migrate_feeds(source_organization, source_project, source_headers, target_organization, target_project, target_headers):
+def migrate_packages(source_organization, source_project, source_headers, target_organization, target_project, target_headers):
     """
-    This function migrates feeds from a source project to a target project.
+    This function migrates packages from a source feed to a target feed.
+
+    • Only packages with source configured as 'This feed' can be migrated.
     """
-    import pyfiglet
     ascii_art = pyfiglet.figlet_format("by codewizard", font="ogre")
     print(ascii_art)
 
@@ -721,18 +725,16 @@ def migrate_feeds(source_organization, source_project, source_headers, target_or
     source_feeds = get_feeds(source_organization, source_project, source_headers)
 
     if not source_feeds:
-        print(f"\033[1;31m[ERROR] No feeds found in the '{source_project}' project in the '{source_organization}' organization.\033[0m")
+        print(f"\033[1;31m[ERROR] No feeds found in the '{source_project}' project in the '{source_organization}' organization; migration aborted\033[0m")
         return
-    
-    print("\n\033[1m[INFO] Fetching feeds completed.\033[0m")
 
-    print("\nAvailable Source Feeds for Migration:")
+    print("\n\033[1;38;5;38mAvailable Source Feeds:\033[0m")
     for i, feed in enumerate(source_feeds, 1):
         print(f"{i} - {feed.get('name', 'Unknown')}")
     
     while True:
         try:
-            source_feed_index = int(input("\nEnter source feed number: ")) - 1
+            source_feed_index = int(input("\n[USER INPUT] Enter source feed number: ")) - 1
 
             if 0 <= source_feed_index < len(source_feeds):
                 source_feed = source_feeds[source_feed_index]
@@ -748,53 +750,58 @@ def migrate_feeds(source_organization, source_project, source_headers, target_or
     source_feed_packages = get_feed_packages(source_organization, source_project, source_headers, source_feed.get('id'))
     
     if not source_feed_packages:
-        print("\033[1;31m[ERROR] No packages found in the selected source feed.\033[0m")
+        print("\033[1;31m[ERROR] No packages found in the selected source feed; migration aborted\033[0m")
         return
     
-    print("\nAvailable Packages for Migration:")
+    print("\n\033[1;38;5;38mAvailable Packages for Migration:\033[0m")
     for i, package in enumerate(source_feed_packages, 1):
         print(f"{i} - {package.get('name', 'Unknown')} (type: {package.get('protocolType', 'Unknown')})")
     
     selected_packages = []
-    print("\nEnter package numbers separated by commas to select specific packages.")
-    print("\nOr:")
-    print("0 - Migrate all packages.")
-    package_selection = input("\nYour choice: ").strip()
-    
-    if package_selection == '0':
-        selected_packages = source_feed_packages
-
-    else:
+    print("\n0 - Migrate all packages.")
+ 
+    while True:
         try:
-            selection_indices = [int(idx.strip()) - 1 for idx in package_selection.split(',')]
-            selected_packages = [source_feed_packages[idx] for idx in selection_indices 
-                                if 0 <= idx < len(source_feed_packages)]
+            package_selection = input("\n[USER INPUT] Enter package numbers separated by commas to select specific packages: ").strip()
             
-            if not selected_packages:
-                print("\033[1;31m[ERROR] No valid packages selected.\033[0m")
-                return
-            
+            if package_selection == '0':
+                selected_packages = source_feed_packages
+                break
+
+            else:
+                try:
+                    selection_indices = [int(idx.strip()) - 1 for idx in package_selection.split(',')]
+                    selected_packages = [source_feed_packages[idx] for idx in selection_indices
+                                        if 0 <= idx < len(source_feed_packages)]
+                    
+                    if not selected_packages:
+                        print(f"Please enter a number(s) between 1 and {len(source_feed_packages)}, or 0 to migrate all packages.")
+                        continue
+                    
+                    break
+
+                except ValueError:
+                    print(f"Please enter a number(s) between 1 and {len(source_feed_packages)}, or 0 to migrate all packages.")
+                    continue
+                
         except ValueError:
-            print("\033[1;31m[ERROR] No valid packages selected.\033[0m")
-            return
+            print(f"Please enter a number(s) between 1 and {len(source_feed_packages)}, or 0 to migrate all packages.")
     
     print(f"\nSelected {len(selected_packages)} package(s) for migration.")
 
     target_feeds = get_feeds(target_organization, target_project, target_headers)
 
     if not target_feeds:
-        print(f"\033[1;31m[ERROR] No feeds found in the '{target_project}' project in the '{target_organization}' organization.\033[0m")
+        print(f"\033[1;31m[ERROR] No feeds found in the '{target_project}' project in the '{target_organization}' organization; migration aborted\033[0m")
         return
-    
-    print("\n\033[1m[INFO] Fetching feeds completed.\033[0m")
 
-    print("\nAvailable Target Feeds:")
+    print("\n\033[1;38;5;38mAvailable Target Feeds:\033[0m")
     for i, feed in enumerate(target_feeds, 1):
         print(f"{i} - {feed.get('name', 'Unknown')}")
     
     while True:
         try:
-            target_feed_index = int(input("\nEnter target feed number: ")) - 1
+            target_feed_index = int(input("\n[USER INPUT] Enter target feed number: ")) - 1
 
             if 0 <= source_feed_index < len(target_feeds):
                 target_feed = target_feeds[target_feed_index]
@@ -807,13 +814,18 @@ def migrate_feeds(source_organization, source_project, source_headers, target_or
         except ValueError:
             print(f"Please enter a number between 1 and {len(target_feeds)}.")
 
-    # Step 5: Confirm the migration
-    print("\nMigration Summary:")
-    print(f"Source: {source_organization}/{source_project}, Feed: {source_feed.get('name')}")
-    print(f"Target: {target_organization}/{target_project}, Feed: {target_feed.get('name')}")
-    print(f"Packages to migrate: {len(selected_packages)}")
+    migrate_all_versions = input("\n[USER INPUT] Migrate all versions of each package? (y/n - default: y): ").lower()
+    migrate_all_versions = migrate_all_versions != 'n'  # Defaults to True if not explicitly 'n'.
     
-    confirmation = input("\nProceed with migration? (y/n): ").lower()
+    print("\n" + "\033[1m=\033[0m" * 100)
+    print("\033[1mMIGRATION SUMMARY\033[0m")
+    print(f"• Source environment: {source_organization}/{source_project} | Feed: {source_feed.get('name')}")
+    print(f"• Target environment: {target_organization}/{target_project} | Feed: {target_feed.get('name')}")
+    print(f"• Packages to migrate: {len(selected_packages)}")
+    print("\033[1m=\033[0m" * 100)
+    
+    confirmation = input("\n[USER INPUT] Proceed with the migration? (y/n): ").lower()
+    
     if confirmation != 'y':
         print("Migration aborted by user.")
         return
@@ -822,37 +834,111 @@ def migrate_feeds(source_organization, source_project, source_headers, target_or
     temp_dir = os.path.join(os.getcwd(), "temp_packages")
     os.makedirs(temp_dir, exist_ok=True)
 
+    # Step 8: Process each selected package
+    successful_migrations = 0
+    total_versions = 0
+    
+    for package in selected_packages:
+        package_name = package.get('name')
+        package_id = package.get('id')
+        protocol_type = package.get('protocolType')
+        
+        print(f"\n{'=' * 60}")
+        print(f"Processing package: {package_name} (Type: {protocol_type})")
+        
+        # Get package versions using the provided function
+        versions = get_package_versions(
+            source_organization,
+            source_project,
+            source_headers,
+            source_feed.get('id'),
+            package_id
+        )
+        
+        if not versions:
+            print(f"\033[1;31m[ERROR] No versions found for package '{package_name}'.\033[0m")
+            continue
+            
+        # Determine which versions to migrate
+        versions_to_migrate = versions
+        if not migrate_all_versions:
+            # Find the latest version
+            latest_version = None
+            for version in versions:
+                if version.get("isLatest", False):
+                    latest_version = version
+                    break
+            
+            # If no version is marked as latest, use the first one
+            if not latest_version and versions:
+                latest_version = versions[0]
+                
+            if not latest_version:
+                print(f"\033[1;31m[ERROR] Could not determine latest version for package '{package_name}'.\033[0m")
+                continue
+                
+            versions_to_migrate = [latest_version]
+        
+        print(f"Migrating {len(versions_to_migrate)} version(s) of package '{package_name}'")
+        total_versions += len(versions_to_migrate)
+        
+        # Process each version
+        for version in versions_to_migrate:
+            version_str = version.get("normalizedVersion", version.get("version"))
+            version_id = version.get("id")
+            
+            print(f"\n{'-' * 40}")
+            print(f"Processing version: {version_str}")
+            
+            # Create package-specific directory
+            pkg_dir = os.path.join(temp_dir, package_name, version_str)
+            os.makedirs(pkg_dir, exist_ok=True)
+            
+            # Download the package
+            print(f"Downloading package '{package_name}' version '{version_str}'...")
+            downloaded_files = download_package_version(
+                source_organization, 
+                source_project, 
+                source_headers,
+                source_feed.get('id'),
+                package_id, 
+                package_name, 
+                version_str,
+                version_id, 
+                protocol_type, 
+                pkg_dir
+            )
+            
+            if not downloaded_files:
+                print(f"\033[1;31m[ERROR] Failed to download version '{version_str}' of package '{package_name}'.\033[0m")
+                continue
+        
+            # Upload the package to target feed
+            print(f"Uploading package '{package_name}' to target feed...")
+            
+            upload_success = upload_package(
+                target_organization, 
+                target_project, 
+                TARGET_PAT,
+                target_feed.get('id'), 
+                downloaded_files, 
+                protocol_type, 
+                package_name
+            )
+        
+        if upload_success:
+            successful_migrations += 1
+            print(f"\033[1;32m[SUCCESS] Package '{package_name}' successfully migrated.\033[0m")
+        else:
+            print(f"\033[1;31m[ERROR] Failed to upload package '{package_name}' to target feed.\033[0m")
+    
+    # Step 8: Cleanup and summary
+    print("\nCleaning up temporary files...")
+    shutil.rmtree(temp_dir, ignore_errors=True)
+    
+    print(f"\n{'=' * 60}")
+    print(f"Migration complete. Successfully migrated {successful_migrations} out of {len(selected_packages)} package(s).")
+    print(f"{'=' * 60}")
+
 if __name__ == "__main__":
-    migrate_feeds('Qognify', SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, TARGET_ORGANIZATION_FEEDS, TARGET_PROJECT, TARGET_AUTHENTICATION_HEADER)
-    """     source_feeds = get_feeds('Qognify', SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER)
-    target_feeds = get_feeds(TARGET_ORGANIZATION_FEEDS, TARGET_PROJECT, TARGET_AUTHENTICATION_HEADER)
-
-    for feed in source_feeds:
-        feed_id = feed['id']
-        feed_packages = get_feed_packages('Qognify', SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, feed_id)
-
-        for package in feed_packages:
-            package_id = package['id']
-            package_name = package['name']
-            print(f"Package: {package_name}") 
-            package_protocol_type = package['protocolType']
-            package_versions = get_package_versions('Qognify', SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, feed_id, package_id)
-
-            if package_name == "Qognify.CEF.x64":
-                for version in package_versions:
-                    version_id = version['id']
-                    version_number = version.get("normalizedVersion", "Unknown Version")
-                    print(f"Version: {version_number}")
-                    downloaded_files = download_package_version('Qognify', SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, feed_id, package_name, version_number, version_id, package_protocol_type, '/Users/pyruc/Desktop/TFVC-to-Git/NuGet')
-                #get_package_details('Qognify', SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, feed_id, package_id, version_id)
-                #break
-            #break
-        #break
-                    for tf in target_feeds:
-                        tf_id = tf['id']
-                        upload_package(TARGET_ORGANIZATION_FEEDS, TARGET_PROJECT, TARGET_PAT, tf_id, downloaded_files, package_protocol_type, package_name)
-                        #break
-                    #break
-                break
-            #break
-        #break """
+    migrate_packages('Qognify', SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, TARGET_ORGANIZATION_FEEDS, TARGET_PROJECT, TARGET_AUTHENTICATION_HEADER)

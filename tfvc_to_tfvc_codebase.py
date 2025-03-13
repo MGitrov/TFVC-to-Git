@@ -1,9 +1,8 @@
 import subprocess
 import json
 
-# Configuration
 source_collection = "https://dev.azure.com/Qognify"
-destination_collection = "https://dev.azure.com/maximpetrov2612"
+target_collection = "https://dev.azure.com/maximpetrov2612"
 source_path = "$/NiceVision"
 #destination_path = "$/DestinationProject/NiceVision"
 #local_source_path = "C:/Migration/Source"
@@ -114,6 +113,14 @@ def save_changesets_to_file(changesets_id, filename="changesets.json"):
 
     print(f"[SUCCESS] Successfully created the '{filename}' file.")
 
+def setup_workspaces():
+    print("Setting up workspaces for migration...")
+
+    # Checks whether there are existing workspaces for the source and target collection and if yes, they are deleted.
+    # It helps us start with a clean state and avoid potential mapping conflicts.
+    run_tf_command(f"workspace /delete source_workspace /collection:{source_collection}", capture_output=False)
+    run_tf_command(f"workspace /delete target_workspace /collection:{target_collection}", capture_output=False)
+
 if __name__ == "__main__":
     """
     In order to create the history file of the repository, we will execute the following command:
@@ -123,3 +130,4 @@ if __name__ == "__main__":
 
     if changesets:
         save_changesets_to_file(changesets)
+        setup_workspaces()

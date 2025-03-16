@@ -1,54 +1,54 @@
 import subprocess
 import json
 
-source_collection = "https://dev.azure.com/Qognify"
-target_collection = "https://dev.azure.com/maximpetrov2612"
-source_path = "$/NiceVision"
-#destination_path = "$/DestinationProject/NiceVision"
-#local_source_path = "C:/Migration/Source"
-#local_destination_path = "C:/Migration/Destination"
+"""
+CLARIFICATIONS:
+• Workspace creation ('tf workspace /new') is handled manually.
+    Command: tf workspace /new /collection:<collectionURL> /comment:"<comment>" <workspace_name>
+    Workspace creation verification: tf workspaces (optional - /collection:<collectionURL>)
+
+• Mapping server path to local path ('tf workfold /map') is handled manually.
+    Command: tf workfold /map '<source_server_path (e.g., $/...)>' '<local_source_path>' /collection:<collectionURL> /workspace:<workspace_name>
+
+• This script is automating regular changesets migration.
+• Branch creation changesets ("unregular" changesets) are handled manually.
+• The 'tf branch' command does not completely creates a branch. To convert a folder to a proper TFVC branch, Visual Studio is needed.
+    (Only the parent branch has to be converted via Visual Studio, as all its descendants will be automatically created as branches
+    once the 'tf branch' command is executed).
+
+PREREQUISITES:
+• Parent (trunk) branches' first changeset.
+    The branch hierarchy can be viewed using either the 'git tfs list-remote-branches <collectionURL>' command, or Visual Studio.
+
+• The first changeset of all other branches.
+• An history file of the source TFVC repository.
+    Command: tf history '<source_server_path (e.g., $/...)>' /recursive /noprompt /format:detailed /collection:<collectionURL> > history.txt
+"""
+
+source_collection = "https://dev.azure.com/maximpetrov2612"
+target_collection = "https://dev.azure.com/maximpetrov1297"
+source_path = "$/TFS-based test project"
+target_path = "$/Magnolia"
+local_source_path = "P:\Work\Migration\SourcePath"
+local_target_path = "P:\Work\Migration\TargetPath"
 
 # There is a need to figure out what changesets are branch creation changeset as it requires a different handling.
 branch_creation_changesets = {
-    # VA branch.
-    8143: {
+    # 'Folder_1-branch' branch.
+    7: {
         "source_path": "$/NiceVision",
         "target_path": "$/NiceVision/VA",
         "comment": "Creating VA branch"
     },
-    # AppGroup/Trunk branch.
-    23146: {
+    # 'Exodus' branch.
+    11: {
         "source_path": "$/NiceVision",
         "target_path": "$/NiceVision/AppGroup/Trunk",
         "comment": "Creating Trunk branch"
-    },
-    # Trunk branch from VA.
-    33041: {
-        "source_path": "$/NiceVision/VA",
-        "target_path": "$/NiceVision/Trunk",
-        "comment": "Creating Trunk branch"
-    },
-    # 12.1.27 branch (top level).
-    44803: {
-        "source_path": "$/NiceVision",
-        "target_path": "$/NiceVision/12.1.27",
-        "comment": "Creating 12.1.27 branch"
-    },
-    # Trunk-PI branch from 12.1.27.
-    44855: {
-        "source_path": "$/NiceVision/12.1.27",
-        "target_path": "$/NiceVision/Trunk-PI",
-        "comment": "Creating Trunk-PI branch"
-    },
-    # 12.1-Plugin branch from Trunk-PI.
-    56743: {
-        "source_path": "$/NiceVision/Trunk-PI",
-        "target_path": "$/NiceVision/12.1-Plugin",
-        "comment": "Creating 12.1-Plugin branch"
     }
 }
 
-def run_tf_command(command, capture_output=True):
+def execute_tf_command(command, capture_output=True):
     """Execute a TF command and return its output"""
     print(f"Executing: tf {command}")
     try:
@@ -111,23 +111,101 @@ def save_changesets_to_file(changesets_id, filename="changesets.json"):
     with open(filename, 'w') as f:
         json.dump(changesets, f, indent=2)
 
-    print(f"[SUCCESS] Successfully created the '{filename}' file.")
+    print(f"\n\033[1;32m[SUCCESS] Successfully created the '{filename}' file.\033[0m")
 
-def setup_workspaces():
-    print("Setting up workspaces for migration...")
+def process_regular_changeset(changeset_id):
+    """
+    This function processes a regular (non-branch creation) changeset.
 
-    # Checks whether there are existing workspaces for the source and target collection and if yes, they are deleted.
-    # It helps us start with a clean state and avoid potential mapping conflicts.
-    run_tf_command(f"workspace /delete source_workspace /collection:{source_collection}", capture_output=False)
-    run_tf_command(f"workspace /delete target_workspace /collection:{target_collection}", capture_output=False)
+    • For each changeset, the function gets the specific changeset from the source repository and check it into the target repository.
+    """
+    print(f"Processing regular changeset {changeset_id}...")
+    
+    # Step 1: Get detailed information about this changeset
+    # This gives us the comment, user, and a list of changes (adds, edits, deletes, etc.)
+    changeset_details = run_tf_command(
+        f"changeset {changeset_id} /collection:{source_collection} /noprompt"
+    )
+    
+    # Extract the comment for use in our check-in
+    comment_match = re.search(r"Comment: (.*?)(?:\r?\n)(?:\r?\n|$)", changeset_details, re.DOTALL)
+    if comment_match:
+        original_comment = comment_match.group(1).strip()
+        # Prepend a note that this is a migrated changeset
+        comment = f"Migrated from changeset {changeset_id}: {original_comment}"
+    else:
+        comment = f"Migrated from changeset {changeset_id}"
+    
+    # Step 2: Clean the destination directory to start fresh
+    # This ensures we're mirroring exactly what was in this changeset
+    if os.path.exists(local_destination_path):
+        print(f"Cleaning destination directory: {local_destination_path}")
+        # Keep the hidden .tf folder to maintain workspace information
+        for item in os.listdir(local_destination_path):
+            full_path = os.path.join(local_destination_path, item)
+            if item != '.tf' and os.path.isdir(full_path):
+                shutil.rmtree(full_path)
+            elif item != '.tf':
+                os.remove(full_path)
+    else:
+        os.makedirs(local_destination_path, exist_ok=True)
+    
+    # Step 3: Get this specific version from the source repository
+    # This downloads the exact state of files as they were in this changeset
+    print(f"Getting source code for changeset {changeset_id}...")
+    run_tf_command(
+        f"workspace /workspace:SourceMigrationWorkspace /collection:{source_collection}"
+    )
+    # cd to source local path
+    get_result = run_tf_command(
+        f"get {source_path} /version:C{changeset_id} /recursive /force /noprompt"
+    )
+    if not get_result:
+        print(f"Error getting source code for changeset {changeset_id}")
+        return False
+    
+    # Step 4: Copy files from source to destination
+    # This transfers the files to our destination workspace
+    print("Copying files to destination workspace...")
+    copy_files_recursively(local_source_path, local_destination_path)
+    
+    # Step 5: Add all files to TFVC in the destination
+    # This stages the files for check-in
+    print("Adding files to destination TFVC...")
+    run_tf_command(
+        f"workspace /workspace:DestinationMigrationWorkspace /collection:{destination_collection}"
+    )
+    
+    # Change to the destination directory
+    original_dir = os.getcwd()
+    os.chdir(local_destination_path)
+    
+    # Add all files to version control
+    add_result = run_tf_command("add * /recursive /noprompt")
+    if not add_result:
+        print("Error adding files to destination")
+        os.chdir(original_dir)
+        return False
+    
+    # Step 6: Check in the changes
+    # This commits the changeset to the destination repository
+    print(f"Checking in changeset to destination with comment: {comment}")
+    checkin_result = run_tf_command(
+        f"checkin /comment:\"{comment}\" /noprompt /recursive"
+    )
+    
+    # Return to the original directory
+    os.chdir(original_dir)
+    
+    if not checkin_result:
+        print("Error checking in files to destination")
+        return False
+    
+    print(f"Successfully processed changeset {changeset_id}")
+    return True
 
 if __name__ == "__main__":
-    """
-    In order to create the history file of the repository, we will execute the following command:
-        'tf history $/tfsPath /recursive /noprompt /format:detailed /collection:organizationURL > history.txt'
-    """
     changesets = parse_history_file(history_file="C:\\Users\\maxim\\history.txt")
 
     if changesets:
         save_changesets_to_file(changesets)
-        setup_workspaces()

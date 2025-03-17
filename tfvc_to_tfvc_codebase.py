@@ -1,5 +1,7 @@
 import subprocess
-import json
+import re
+import os
+import shutil
 
 """
 CLARIFICATIONS:
@@ -19,6 +21,7 @@ CLARIFICATIONS:
 PREREQUISITES:
 • Parent (trunk) branches' first changeset.
     The branch hierarchy can be viewed using either the 'git tfs list-remote-branches <collectionURL>' command, or Visual Studio.
+    The parent branch is migrated as a regular changeset, and once migrated will be converted to a branch via Visual Studio.
 
 • The first changeset of all other branches.
 • An history file of the source TFVC repository.
@@ -27,10 +30,12 @@ PREREQUISITES:
 
 source_collection = "https://dev.azure.com/maximpetrov2612"
 target_collection = "https://dev.azure.com/maximpetrov1297"
-source_path = "$/TFS-based test project"
-target_path = "$/Magnolia"
+source_server_path = "$/TFS-based test project"
 local_source_path = "P:\Work\Migration\SourcePath"
 local_target_path = "P:\Work\Migration\TargetPath"
+
+parent_branch_creation_changesets = [6]
+branch_creation_changesets = [7, 11, 12]
 
 # There is a need to figure out what changesets are branch creation changeset as it requires a different handling.
 branch_creation_changesets = {
@@ -45,22 +50,34 @@ branch_creation_changesets = {
         "source_path": "$/NiceVision",
         "target_path": "$/NiceVision/AppGroup/Trunk",
         "comment": "Creating Trunk branch"
+    },
+    # 'tulip' branch.
+    12: {
+        "source_path": "$/NiceVision",
+        "target_path": "$/NiceVision/AppGroup/Trunk",
+        "comment": "Creating Trunk branch"
     }
 }
 
 def execute_tf_command(command, capture_output=True):
-    """Execute a TF command and return its output"""
-    print(f"Executing: tf {command}")
+    """
+    This function executes a 'TF' command.
+    """
+    print(f"Executing the following command: tf {command}")
+
     try:
         result = subprocess.run(f"tf {command}", shell=True, 
                               capture_output=capture_output, text=True, check=True)
+        
         if capture_output:
             return result.stdout
         return True
+    
     except subprocess.CalledProcessError as e:
-        print(f"Error executing command: {e}")
+        print(f"\n\033[1;31m[ERROR] An error occurred while executing the 'tf' command: {e}\033[0m")
+
         if capture_output:
-            print(f"Error output: {e.stderr}")
+            print(f"\033[1;31m[ERROR] Output: {e.stderr}\033[0m\n")
         return None
 
 def parse_history_file(history_file):
@@ -92,7 +109,7 @@ def parse_history_file(history_file):
     
     return changeset_ids_list
 
-def save_changesets_to_file(changesets_id, filename="changesets.json"):
+def save_changesets_to_file(changesets_id, filename="changesets.json"): #DEPRECATED.
     """
     This function saves the changesets id list to a JSON file.
     """
@@ -119,24 +136,25 @@ def process_regular_changeset(changeset_id):
 
     • For each changeset, the function gets the specific changeset from the source repository and check it into the target repository.
     """
-    print(f"Processing regular changeset {changeset_id}...")
+    print("\n" + "\033[1m=\033[0m" * 100)
+    print(f"\033[1mPROCESSING REGULAR CHANGESET {changeset_id}\033[0m")
+    print("\033[1m=\033[0m" * 100)
     
-    # Step 1: Get detailed information about this changeset
-    # This gives us the comment, user, and a list of changes (adds, edits, deletes, etc.)
-    changeset_details = run_tf_command(
+    # Step 1: Fetches the information about the current processed changeset to use later in check-in.
+    changeset_details = execute_tf_command(
         f"changeset {changeset_id} /collection:{source_collection} /noprompt"
     )
     
-    # Extract the comment for use in our check-in
-    comment_match = re.search(r"Comment: (.*?)(?:\r?\n)(?:\r?\n|$)", changeset_details, re.DOTALL)
+    comment_match = re.search(r"Comment:\s*(.*?)(?:\r?\n\r?\n|\r?\n$|$)", changeset_details, re.DOTALL) # Extracts the comment for use in the changeset's check-in.
+
     if comment_match:
         original_comment = comment_match.group(1).strip()
-        # Prepend a note that this is a migrated changeset
-        comment = f"Migrated from changeset {changeset_id}: {original_comment}"
+        new_comment = f"Migrated from changeset no. {changeset_id}: {original_comment}" # Prepends a note that this is a migrated changeset.
+
     else:
-        comment = f"Migrated from changeset {changeset_id}"
-    
-    # Step 2: Clean the destination directory to start fresh
+        new_comment = f"Migrated from changeset no. {changeset_id}"
+
+    """     # Step 2: Clean the destination directory to start fresh
     # This ensures we're mirroring exactly what was in this changeset
     if os.path.exists(local_destination_path):
         print(f"Cleaning destination directory: {local_destination_path}")
@@ -148,27 +166,28 @@ def process_regular_changeset(changeset_id):
             elif item != '.tf':
                 os.remove(full_path)
     else:
-        os.makedirs(local_destination_path, exist_ok=True)
-    
-    # Step 3: Get this specific version from the source repository
-    # This downloads the exact state of files as they were in this changeset
-    print(f"Getting source code for changeset {changeset_id}...")
-    run_tf_command(
-        f"workspace /workspace:SourceMigrationWorkspace /collection:{source_collection}"
+        os.makedirs(local_destination_path, exist_ok=True) """
+
+    # Step 2: Downloads the exact state of files as they were in the current processed changeset.
+    print(f"\n[INFO] Fetching the state of the changeset...")
+
+    os.chdir(local_source_path)
+    print(f"Current working directory: {os.getcwd()}\n")
+
+    get_result = execute_tf_command(
+        f"get \"{source_server_path}\" /version:C{changeset_id} /recursive /force"
     )
-    # cd to source local path
-    get_result = run_tf_command(
-        f"get {source_path} /version:C{changeset_id} /recursive /force /noprompt"
-    )
+
     if not get_result:
-        print(f"Error getting source code for changeset {changeset_id}")
+        print(f"\033[1;31m[ERROR] Failed to fetch the state of the changeset.\033[0m")
         return False
     
-    # Step 4: Copy files from source to destination
-    # This transfers the files to our destination workspace
-    print("Copying files to destination workspace...")
-    copy_files_recursively(local_source_path, local_destination_path)
-    
+
+    # Step 3: Copies files and directories from the source local path to the target local path.
+    print(f"Copying files to {local_target_path} (target local path)...")
+    copy_files_recursively(local_source_path, local_target_path)
+
+    """
     # Step 5: Add all files to TFVC in the destination
     # This stages the files for check-in
     print("Adding files to destination TFVC...")
@@ -202,10 +221,32 @@ def process_regular_changeset(changeset_id):
         return False
     
     print(f"Successfully processed changeset {changeset_id}")
-    return True
+    return True """
+
+def copy_files_recursively(source_local_directory, target_local_directory):
+    """
+    Copy all files from source directory to destination directory, recursively.
+    This utility function helps transfer files between workspaces.
+    """
+    for item in os.listdir(source_local_directory):
+        source_item = os.path.join(source_local_directory, item)
+        dest_item = os.path.join(target_local_directory, item)
+        
+        # Skip the .tf directory which contains workspace information
+        if item == '.tf':
+            continue
+            
+        if os.path.isdir(source_item):
+            # Create the directory if it doesn't exist
+            os.makedirs(dest_item, exist_ok=True)
+            # Recursively copy contents
+            copy_files_recursively(source_item, dest_item)
+        else:
+            # Copy the file
+            shutil.copy2(source_item, dest_item)
 
 if __name__ == "__main__":
     changesets = parse_history_file(history_file="C:\\Users\\maxim\\history.txt")
+    print(f"\n\033[1m{changesets}\033[0m\n")
 
-    if changesets:
-        save_changesets_to_file(changesets)
+    process_regular_changeset(changeset_id=3)

@@ -64,24 +64,52 @@ branch_creation_changesets = {
 
 def execute_tf_command(command, capture_output=True):
     """
-    This function executes a 'TF' command.
+    This function executes a 'TF' command with improved error handling for already-tracked files.
     """
     print(f"Executing the following command: tf {command}")
-
+    
     try:
-        result = subprocess.run(f"tf {command}", shell=True, 
-                              capture_output=capture_output, text=True, check=True)
+        result = subprocess.run(f"tf {command}", shell=True,
+                               capture_output=capture_output, text=True, check=True)
         
         if capture_output:
             return result.stdout
         return True
-    
+        
     except subprocess.CalledProcessError as e:
-        print(f"\n\033[1;31m[ERROR] An error occurred while executing the 'tf' command: {e}\033[0m")
+        # Checks whether this is an "already has pending changes" error.
+        if e.stderr and "already has pending changes" in e.stderr:
+            file_match = re.search(r'\$/(.*?) already has pending changes', e.stderr)
 
-        if capture_output:
-            print(f"\033[1;31m[ERROR] Output: {e.stderr}\033[0m\n")
-        return None
+            if file_match:
+                file_path = file_match.group(1)
+                print(f"\n\033[1;33m[INFO] File '${file_path}' is already tracked by TFVC and was not added in this changeset.\033[0m")
+
+            else:
+                print(f"\n\033[1;33m[INFO] Some files are already tracked by TFVC and were not added in this changeset.\033[0m")
+            
+            # If this is an 'add' command, this is treated as a warning, not an error, and the script continues.
+            if "add " in command or "add*" in command:
+                print("\033[1;33m[INFO] This is an expected behavior in TFVC when migrating sequential changesets and will not affect the process.\033[0m")
+                
+                if capture_output:
+                    return {"status": "already_tracked", "message": e.stderr}
+                return True
+            
+            else:
+                # For non-add commands, still show the error but in warning color
+                print(f"\n\033[1;38;5;214m[WARNING] Command returned non-zero exit status: {e}\033[0m")
+
+                if capture_output:
+                    print(f"\033[1;38;5;214m[WARNING] Output: {e.stderr}\033[0m\n")
+                return None
+        else:
+            # Handle other types of errors normally
+            print(f"\n\033[1;31m[ERROR] An error occurred while executing the 'tf' command: {e}\033[0m")
+            
+            if capture_output:
+                print(f"\033[1;31m[ERROR] Output: {e.stderr}\033[0m\n")
+            return None
 
 def parse_history_file(history_file):
     """

@@ -1,8 +1,10 @@
 import subprocess
 import re
 import os
+import sys
 import shutil
 import time
+import datetime
 import json
 import traceback
 
@@ -34,6 +36,7 @@ PREREQUISITES:
 source_collection = "https://dev.azure.com/maximpetrov2612"
 target_collection = "https://dev.azure.com/maximpetrov1297"
 source_server_path = "$/TFS-based test project"
+target_server_path = "$/Magnolia"
 local_source_path = "P:\Work\Migration\SourcePath"
 local_target_path = "P:\Work\Migration\TargetPath"
 
@@ -184,27 +187,21 @@ def process_regular_changeset(changeset_id):
     copy_files_recursively(local_source_path, local_target_path)
 
 
-    # Step 4: Stages all files for check-in
+    # Step 4: Stages all files for check-in.
     print("\nStaging all files for check-in...")
 
     os.chdir(local_target_path)
     print(f"Current working directory: {os.getcwd()}\n")
 
-    # Force workspace reconciliation to ensure accurate status
-    #print("Reconciling workspace to ensure accurate status...")
-    #execute_tf_command("workfold /reconcile")
-
-    # Use a single batch add command, which is more reliable for this scenario
     print("Adding all files...")
     add_result = execute_tf_command("add * /recursive /noprompt")
 
     if not add_result:
         print("\033[1;33m[WARNING] Failed to add files.\033[0m")
-        # Try using pendadd as an alternative
-        #execute_tf_command("pendadd /recursive /noprompt")
 
-    # Verify files were successfully staged
+    # Verifies files were successfully staged for check-in.
     final_status = execute_tf_command("status")
+
     if "There are no pending changes" in final_status:
         print("\033[1;33m[WARNING] No pending changes detected after adding files. Verify results.\033[0m")
         return False
@@ -285,6 +282,120 @@ def was_file_deleted(file_path):
     output = execute_tf_command(f'history "{file_path}" /noprompt')
     return "delete" in output.lower()
 
+def save_migration_state(last_processed_changeset, branch_changeset, all_changesets):
+    """
+    Saves the current migration state to a local file when encountering a branch creation changeset.
+    
+    Args:
+        last_processed_changeset: The ID of the last successfully processed changeset
+        branch_changeset: The ID of the branch creation changeset that needs manual handling
+        all_changesets: The complete list of changesets from the history file
+    """
+    # Get the script's directory to save the state files there
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    # Create a timestamp for unique filenames
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    # Determine remaining changesets
+    if all_changesets:
+        current_index = all_changesets.index(branch_changeset) if branch_changeset in all_changesets else -1
+        remaining_changesets = all_changesets[current_index+1:] if current_index >= 0 else []
+    else:
+        remaining_changesets = []
+    
+    # Create state data
+    state_data = {
+        "last_processed_changeset": last_processed_changeset,
+        "branch_creation_changeset": branch_changeset,
+        "timestamp": timestamp,
+        "resume_from_changeset": branch_changeset + 1,  # Suggest resuming from the next changeset
+        "source_collection": source_collection,
+        "source_server_path": source_server_path,
+        "target_server_path": target_server_path,
+        "remaining_changesets": remaining_changesets  # Add the list of remaining changesets
+    }
+    
+    # Save the state information to a JSON file
+    state_file_path = os.path.join(script_dir, f"migration_state_{timestamp}.json")
+    with open(state_file_path, "w") as state_file:
+        json.dump(state_data, state_file, indent=4)
+    
+    # Also create a more user-friendly text file with instructions
+    instructions_file_path = os.path.join(script_dir, f"migration_instructions_{timestamp}.txt")
+    with open(instructions_file_path, "w") as instructions_file:
+        instructions_file.write("=" * 80 + "\n")
+        instructions_file.write(f"TFVC MIGRATION PAUSED - BRANCH CREATION DETECTED\n")
+        instructions_file.write("=" * 80 + "\n\n")
+        
+        instructions_file.write(f"Migration paused at: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+        
+        instructions_file.write("CURRENT STATE:\n")
+        instructions_file.write(f"• Last successfully processed changeset: {last_processed_changeset}\n")
+        instructions_file.write(f"• Branch creation changeset requiring manual handling: {branch_changeset}\n\n")
+        
+        instructions_file.write("MANUAL STEPS REQUIRED:\n")
+        instructions_file.write("1. Create the branch in the target repository manually\n")
+        instructions_file.write("2. Check in the branch creation\n")
+        instructions_file.write("3. Verify the branch structure is correct\n\n")
+        
+        instructions_file.write("TO RESUME MIGRATION:\n")
+        instructions_file.write(f"• Resume the script with changeset {branch_changeset + 1}\n")
+        instructions_file.write(f"• Command: python tfvc_to_tfvc_codebase.py --start-changeset {branch_changeset + 1}\n\n")
+        
+        instructions_file.write("REPOSITORY DETAILS:\n")
+        instructions_file.write(f"• Source collection: {source_collection}\n")
+        instructions_file.write(f"• Source path: {source_server_path}\n")
+        instructions_file.write(f"• Target path: {target_server_path}\n\n")
+        
+        # Add the remaining changesets section
+        instructions_file.write("REMAINING CHANGESETS TO PROCESS:\n")
+        if remaining_changesets:
+            for i, changeset in enumerate(remaining_changesets, 1):
+                instructions_file.write(f"• {i}. Changeset {changeset}\n")
+        else:
+            instructions_file.write("• No remaining changesets (branch creation was the last changeset)\n")
+    
+    print("\n" + "!" * 100)
+    print(f"\033[1;33m[INFO] Migration state saved to: {state_file_path}\033[0m")
+    print(f"\033[1;33m[INFO] Instructions for resuming migration saved to: {instructions_file_path}\033[0m")
+    print("!" * 100 + "\n")
+
+def handle_branch_creation_changeset(changeset_id, last_processed_changeset, all_changesets):
+    """
+    Handles a branch creation changeset by pausing the script and providing instructions.
+    
+    Args:
+        changeset_id: The ID of the branch creation changeset
+        last_processed_changeset: The ID of the last successfully processed changeset
+        all_changesets: The complete list of changesets from the history file
+    """
+    print("\n" + "\033[1m=\033[0m" * 100)
+    print(f"\033[1;33m[BRANCH CREATION DETECTED] Changeset {changeset_id} creates a new branch\033[0m")
+    print("\033[1m=\033[0m" * 100)
+    
+    # Get branch details for user reference
+    branch_details = execute_tf_command(
+        f"changeset {changeset_id} /collection:{source_collection} /noprompt"
+    )
+    
+    # Save current migration state with the list of remaining changesets
+    save_migration_state(last_processed_changeset, changeset_id, all_changesets)
+    
+    print("\n\033[1;33m[MANUAL ACTION REQUIRED] This changeset creates a new branch and needs manual handling.\033[0m")
+    print("\n\033[1;33mBranch creation details:\033[0m")
+    print(branch_details)
+    
+    print("\n\033[1;33mPlease follow these steps:\033[0m")
+    print("1. Create the branch in the target repository manually")
+    print("2. Check in the branch creation")
+    print("3. Verify the branch structure is correct")
+    print(f"4. Resume the script with changeset {changeset_id + 1}")
+    print(f"   Command: python tfvc_to_tfvc_codebase.py --start-changeset {changeset_id + 1}")
+    
+    # Exit the script with a special code indicating manual intervention is needed
+    sys.exit(42)  # Using 42 as a special exit code to indicate manual steps needed
+
 def process_repository_changesets():
     """
     Main logic function that processes all changesets in the repository.
@@ -294,6 +405,7 @@ def process_repository_changesets():
     2. Processes them in chronological order
     3. Stops when a branch creation changeset is encountered
     4. Provides detailed progress information
+    5. Creates state files when encountering branch creation changesets
     
     Returns:
         tuple: (success_count, failure_count, stopped_at_changeset)
@@ -305,7 +417,10 @@ def process_repository_changesets():
     # Get all changesets from history file
     print("\nParsing history file to extract all changesets...")
     start_time = time.time()
-    all_changesets = [8, 10, 11, 12]#parse_history_file(history_file="C:\\Users\\maxim\\history.txt")
+    all_changesets = [
+        13,
+        14
+    ]#parse_history_file(history_file="C:\\Users\\maxim\\history.txt")
     parse_time = time.time() - start_time
     
     if not all_changesets:
@@ -318,6 +433,7 @@ def process_repository_changesets():
     # Initialize counters
     success_count = 0
     failure_count = 0
+    last_processed_changeset = None
     
     # Process each changeset in order
     for index, changeset_id in enumerate(all_changesets):
@@ -331,13 +447,21 @@ def process_repository_changesets():
         
         # Check if this is a branch creation changeset
         if changeset_id in parent_branch_creation_changesets:
-            print(f"\033[1;33m[STOPPING] Changeset {changeset_id} is a parent branch creation changeset.\033[0m")
-            print(f"\033[1;33mMigration process stopped at changeset {changeset_id}. Please handle this branch creation manually.\033[0m")
+            print(f"\033[1;33m[BRANCH CREATION DETECTED] Changeset {changeset_id} is a parent branch creation changeset.\033[0m")
+            
+            # Call the new function to handle branch creation and save state, passing the full changeset list
+            handle_branch_creation_changeset(changeset_id, last_processed_changeset, all_changesets)
+            
+            # The script will exit within handle_branch_creation_changeset, but just in case:
             return success_count, failure_count, changeset_id
             
         if changeset_id in branch_creation_changesets:
-            print(f"\033[1;33m[STOPPING] Changeset {changeset_id} is a branch creation changeset.\033[0m")
-            print(f"\033[1;33mMigration process stopped at changeset {changeset_id}. Please handle this branch creation manually.\033[0m")
+            print(f"\033[1;33m[BRANCH CREATION DETECTED] Changeset {changeset_id} is a branch creation changeset.\033[0m")
+            
+            # Call the new function to handle branch creation and save state, passing the full changeset list
+            handle_branch_creation_changeset(changeset_id, last_processed_changeset, all_changesets)
+            
+            # The script will exit within handle_branch_creation_changeset, but just in case:
             return success_count, failure_count, changeset_id
         
         # Process regular changeset
@@ -349,6 +473,7 @@ def process_repository_changesets():
             
             if result:
                 success_count += 1
+                last_processed_changeset = changeset_id  # Update the last successfully processed changeset
                 changeset_time = time.time() - changeset_start_time
                 print(f"\033[1;32m[SUCCESS] Processed changeset {changeset_id} successfully (took {changeset_time:.2f} seconds).\033[0m")
             else:
@@ -369,16 +494,6 @@ def process_repository_changesets():
             print(f"Status: {success_count} successful, {failure_count} failed")
             print(f"Elapsed time: {elapsed_time:.2f} seconds")
             print(f"Estimated time remaining: {int(hours)}h {int(minutes)}m {int(seconds)}s")
-            
-            """             # Optional: Save progress to a file so we can resume later if needed
-            with open("migration_progress.json", "w") as f:
-                json.dump({
-                    "last_processed_index": index,
-                    "last_processed_changeset": changeset_id,
-                    "success_count": success_count,
-                    "failure_count": failure_count,
-                    "timestamp": time.time()
-                }, f, indent=2) """
                 
         except Exception as e:
             failure_count += 1

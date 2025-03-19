@@ -67,10 +67,16 @@ branch_creation_changesets = {
 
 def execute_tf_command(command, capture_output=True):
     """
-    This function executes a 'TF' command with improved error handling for already-tracked files.
+    This function executes a 'TF' command with improved error handling for already-tracked files
+    and progress display for 'get' operations.
     """
     print(f"Executing the following command: tf {command}")
     
+    # Check if this is a 'get' command with potential for long-running operation
+    if ('get' in command and '/recursive' in command) or 'get /version' in command:
+        return execute_tf_get_with_progress(command)
+    
+    # Standard command execution for non-get commands
     try:
         result = subprocess.run(f"tf {command}", shell=True,
                                capture_output=capture_output, text=True, check=True)
@@ -83,11 +89,10 @@ def execute_tf_command(command, capture_output=True):
         # Checks whether this is an "already has pending changes" error.
         if e.stderr and "already has pending changes" in e.stderr:
             file_match = re.search(r'\$/(.*?) already has pending changes', e.stderr)
-
+            
             if file_match:
                 file_path = file_match.group(1)
                 print(f"\n\033[1;33m[INFO] File '${file_path}' is already tracked by TFVC and was not added in this changeset.\033[0m")
-
             else:
                 print(f"\n\033[1;33m[INFO] Some files are already tracked by TFVC and were not added in this changeset.\033[0m")
             
@@ -98,11 +103,11 @@ def execute_tf_command(command, capture_output=True):
                 if capture_output:
                     return {"status": "already_tracked", "message": e.stderr}
                 return True
-            
+                
             else:
                 # For non-add commands, still show the error but in warning color
                 print(f"\n\033[1;38;5;214m[WARNING] Command returned non-zero exit status: {e}\033[0m")
-
+                
                 if capture_output:
                     print(f"\033[1;38;5;214m[WARNING] Output: {e.stderr}\033[0m\n")
                 return None
@@ -113,6 +118,71 @@ def execute_tf_command(command, capture_output=True):
             if capture_output:
                 print(f"\033[1;31m[ERROR] Output: {e.stderr}\033[0m\n")
             return None
+
+def execute_tf_get_with_progress(command):
+    """
+    Execute 'tf get' command with a simple progress indicator showing that the command is still running.
+    Doesn't try to parse the output, just shows elapsed time and activity.
+    """
+    print("Starting file retrieval (this may take some time for large repositories)...")
+    
+    # Start process in background
+    start_time = time.time()
+    
+    # Use a thread to run the command and capture output
+    import threading
+    import io
+    
+    output = io.StringIO()
+    error_output = io.StringIO()
+    return_code = [0]  # Use a list to store the return code so it can be modified by the thread
+    
+    def run_command():
+        try:
+            process = subprocess.run(f"tf {command}", shell=True, capture_output=True, text=True, check=False)
+            output.write(process.stdout)
+            error_output.write(process.stderr)
+            return_code[0] = process.returncode
+        except Exception as e:
+            error_output.write(f"Exception occurred: {str(e)}")
+            return_code[0] = -1
+    
+    thread = threading.Thread(target=run_command)
+    thread.start()
+    
+    # Simple animation while the command is running
+    animation = "|/-\\"
+    idx = 0
+    
+    while thread.is_alive():
+        elapsed = time.time() - start_time
+        mins, secs = divmod(int(elapsed), 60)
+        hours, mins = divmod(mins, 60)
+        
+        time_str = f"{hours:02d}:{mins:02d}:{secs:02d}"
+        print(f"\rRetrieving files {animation[idx]} [Elapsed: {time_str}]", end="", flush=True)
+        
+        idx = (idx + 1) % len(animation)
+        time.sleep(0.5)  # Update twice per second
+    
+    # Command has completed
+    elapsed_time = time.time() - start_time
+    mins, secs = divmod(int(elapsed_time), 60)
+    hours, mins = divmod(mins, 60)
+    time_str = f"{hours:02d}:{mins:02d}:{secs:02d}"
+    
+    print(f"\rOperation completed in {time_str} {'  ' * 10}")
+    
+    # Check for errors
+    if return_code[0] != 0:
+        print(f"\n\033[1;31m[ERROR] Command failed with return code {return_code[0]}\033[0m")
+        error_text = error_output.getvalue()
+        if error_text:
+            print(f"\033[1;31m[ERROR] Error output: {error_text}\033[0m")
+        return None
+    
+    # Return the captured output
+    return output.getvalue()
 
 def parse_history_file(history_file):
     """
@@ -418,8 +488,7 @@ def process_repository_changesets():
     print("\nParsing history file to extract all changesets...")
     start_time = time.time()
     all_changesets = [
-        13,
-        14
+        16
     ]#parse_history_file(history_file="C:\\Users\\maxim\\history.txt")
     parse_time = time.time() - start_time
     

@@ -52,7 +52,7 @@ def execute_tf_command(command, capture_output=True):
     """
     This function executes a 'TF' command with improved error handling for already-tracked files, and progress display for the 'tf get' command.
     """
-    print(f"[COMMAND EXECUTION] Executing the following command: tf {command}")
+    print(f"\033[1m[COMMAND EXECUTION] Executing the following command: tf {command}\033[0m")
     
     # Checks whether this is a 'get' command as it is handled differently.
     if ('get' in command and '/recursive' in command) or 'get /version' in command:
@@ -106,7 +106,7 @@ def execute_tf_get_command(command):
     """
     This function executes the 'tf get' command with a progress indicator showing that the command is still running (helpful for large repositories).
     """
-    print("[INFO] Starting file retrieval (this may take some time for large repositories)...")
+    print("\033[1m[INFO] Starting file retrieval (this may take some time for large repositories)...\033[0m")
     
     start_time = time.time()
     
@@ -171,7 +171,7 @@ def parse_history_file(history_file):
     """
     This function parses the TFVC repository history file, extracting only changeset IDs.
     """
-    print(f"Extracting changeset IDs from the '{history_file}' history file...")
+    print(f"\033[1m[INFO] Extracting changeset IDs from the '{history_file}' history file...\033[0m")
 
     changeset_ids = set()
     
@@ -188,11 +188,11 @@ def parse_history_file(history_file):
                     changeset_ids.add(changeset_id)
 
                 except Exception as e:
-                    print(f"[ERROR] Error parsing changeset ID from line {line}; error message: {e}")
+                    print(f"\n\033[1;31m[ERROR] Error parsing changeset ID from line {line}; error message: {e}\033[0m")
     
     changeset_ids_list = sorted(list(changeset_ids))
 
-    print(f"Processed {line_count} lines and found {len(changeset_ids_list)} unique changeset IDs")
+    #print(f"\033[1m[INFO] Processed {line_count} lines and found {len(changeset_ids_list)} unique changeset IDs.\033[0m")
     
     return changeset_ids_list
 
@@ -202,9 +202,9 @@ def process_regular_changeset(changeset_id):
 
     • For each changeset, the function gets the specific changeset from the source repository and check it into the target repository.
     """
-    print("\n" + "\033[1m=\033[0m" * 100)
+    print("\n" + "\033[1m-\033[0m" * 100)
     print(f"\033[1mPROCESSING REGULAR CHANGESET {changeset_id}\033[0m")
-    print("\033[1m=\033[0m" * 100)
+    print("\033[1m-\033[0m" * 100)
     
     # Step 1: Fetches the information about the current processed changeset to use later in check-in.
     changeset_details = execute_tf_command(
@@ -221,10 +221,10 @@ def process_regular_changeset(changeset_id):
         new_comment = f"Migrated from changeset no. {changeset_id}"
 
     # Step 2: Downloads the exact state of files as they were in the current processed changeset.
-    print(f"\nFetching the state of the changeset...")
+    print(f"\n\033[1m[INFO] Fetching the state of the changeset...\033[0m")
 
     os.chdir(local_source_path)
-    print(f"\nCurrent working directory: {os.getcwd()}\n")
+    print(f"Current working directory: {os.getcwd()}\n")
 
     get_result = execute_tf_command(
         f"get \"{source_server_path}\" /version:C{changeset_id} /recursive /force"
@@ -236,41 +236,40 @@ def process_regular_changeset(changeset_id):
     
 
     # Step 3: Copies files and directories from the source local path to the local target path.
-    print(f"\nCopying all files to '{local_target_path}' (local target path)...")
+    print(f"\n\033[1m[INFO] Copying all files to '{local_target_path}' (local target path)...\033[0m")
     copy_files_recursively(local_source_path, local_target_path)
 
 
     # Step 4: Stages all files for check-in.
-    print("\nStaging all files for check-in...")
+    print("\n\033[1m[INFO] Staging all files for check-in...\033[0m")
 
     os.chdir(local_target_path)
     print(f"Current working directory: {os.getcwd()}\n")
 
-    print("Adding all files...")
     add_result = execute_tf_command("add * /recursive /noprompt")
 
     if not add_result:
-        print("\033[1;33m[WARNING] Failed to add files.\033[0m")
+        print("\033[1;38;5;214m[WARNING] Failed to add files.\033[0m")
 
     # Verifies files were successfully staged for check-in.
     final_status = execute_tf_command("status")
 
     if "There are no pending changes" in final_status:
-        print("\033[1;33m[WARNING] No pending changes detected after adding files. Verify results.\033[0m")
+        print("\n\033[1;38;5;214m[WARNING] No pending changes detected after adding files, please verify results.\033[0m")
         return False
     
     # Step 5: Checks-in the changeset.
-    print(f"\nChecking in changeset with the following comment: '{new_comment}'")
+    print(f"\n\033[1m[INFO] Checking in changeset with the following comment: '{new_comment}'\033[0m")
 
     checkin_result = execute_tf_command(
         f"checkin /comment:\"{new_comment}\" /noprompt /recursive"
     )
     
     if not checkin_result:
-        print("\033[1;31m[ERROR] Failed to check-in the changeset.\033[0m")
+        print("\n\033[1;31m[ERROR] Failed to check-in the changeset.\033[0m")
         return False
     
-    print(f"\n\033[1;32m[SUCCESS] Successfully processed changeset no. {changeset_id}.\033[0m")
+    #print(f"\n\033[1;32m[SUCCESS] Successfully processed changeset no. {changeset_id}.\033[0m")
     return True
 
 def copy_files_recursively(source_local_directory, target_local_directory):
@@ -449,125 +448,99 @@ def handle_branch_creation_changeset(changeset_id, last_processed_changeset, all
     # Exit the script with a special code indicating manual intervention is needed
     sys.exit(42)  # Using 42 as a special exit code to indicate manual steps needed
 
-def process_repository_changesets():
+def process_repository_changesets(history_file):
     """
-    Main logic function that processes all changesets in the repository.
-    
-    This function:
-    1. Gets all changesets from the history file
-    2. Processes them in chronological order
-    3. Stops when a branch creation changeset is encountered
-    4. Provides detailed progress information
-    5. Creates state files when encountering branch creation changesets
-    
+    This function migrates a TFVC-based repository from a source project to a target project.
+
     Returns:
         tuple: (success_count, failure_count, stopped_at_changeset)
     """
-    print("\n" + "=" * 100)
-    print("STARTING REPOSITORY MIGRATION")
-    print("=" * 100)
+    print("\n" + "\033[1m=\033[0m" * 100)
+    print(f"\033[1mSTARTING REPOSITORY MIGRATION\033[0m")
+    print("\033[1m=\033[0m" * 100)
     
-    # Get all changesets from history file
-    print("\nParsing history file to extract all changesets...")
+    # Fetches all changesets from repository's history file.
     start_time = time.time()
-    all_changesets = [
-        16
-    ]#parse_history_file(history_file="C:\\Users\\maxim\\history.txt")
+    all_changesets = [17, 18]#parse_history_file(history_file=history_file)
     parse_time = time.time() - start_time
     
     if not all_changesets:
-        print("\033[1;31m[ERROR] Failed to get changesets from history file.\033[0m")
+        print("\033[1;31m[ERROR] Failed to get changesets from repository's history file.\033[0m")
         return 0, 0, None
     
     total_changesets = len(all_changesets)
-    print(f"\033[1;32m[SUCCESS] Found {total_changesets} changesets in history file (took {parse_time:.2f} seconds).\033[0m")
+    print(f"\nFound {total_changesets} changesets in repository's history file (took {parse_time:.2f} seconds).\033[0m")
     
-    # Initialize counters
+    # Counters.
     success_count = 0
     failure_count = 0
     last_processed_changeset = None
     
-    # Process each changeset in order
+    # Processes the changesets sequentially.
     for index, changeset_id in enumerate(all_changesets):
         # Calculate progress percentage
         progress = (index + 1) / total_changesets * 100
         
-        # Display progress header
-        print("\n" + "-" * 100)
-        print(f"\033[1mPROCESSING CHANGESET {index+1}/{total_changesets} ({progress:.1f}%): ID {changeset_id}\033[0m")
-        print("-" * 100)
-        
-        # Check if this is a branch creation changeset
+        # Checks whether this is an any branch creation changeset.
         if changeset_id in parent_branch_creation_changesets:
-            print(f"\033[1;33m[BRANCH CREATION DETECTED] Changeset {changeset_id} is a parent branch creation changeset.\033[0m")
-            
-            # Call the new function to handle branch creation and save state, passing the full changeset list
+            print(f"\n\033[1;33m[BRANCH CREATION DETECTED] Changeset {changeset_id} is a parent (trunk) branch creation changeset.\033[0m")
             handle_branch_creation_changeset(changeset_id, last_processed_changeset, all_changesets)
             
-            # The script will exit within handle_branch_creation_changeset, but just in case:
+            # The script will exit within the 'handle_branch_creation_changeset' function, but just in case.
             return success_count, failure_count, changeset_id
             
         if changeset_id in branch_creation_changesets:
-            print(f"\033[1;33m[BRANCH CREATION DETECTED] Changeset {changeset_id} is a branch creation changeset.\033[0m")
-            
-            # Call the new function to handle branch creation and save state, passing the full changeset list
+            print(f"\n\033[1;33m[BRANCH CREATION DETECTED] Changeset {changeset_id} is a branch creation (non-parent) changeset.\033[0m")
             handle_branch_creation_changeset(changeset_id, last_processed_changeset, all_changesets)
             
-            # The script will exit within handle_branch_creation_changeset, but just in case:
+            # The script will exit within the 'handle_branch_creation_changeset' function, but just in case.
             return success_count, failure_count, changeset_id
         
-        # Process regular changeset
         changeset_start_time = time.time()
-        print(f"Starting to process changeset {changeset_id}...")
         
         try:
             result = process_regular_changeset(changeset_id)
             
             if result:
                 success_count += 1
-                last_processed_changeset = changeset_id  # Update the last successfully processed changeset
+                last_processed_changeset = changeset_id
                 changeset_time = time.time() - changeset_start_time
-                print(f"\033[1;32m[SUCCESS] Processed changeset {changeset_id} successfully (took {changeset_time:.2f} seconds).\033[0m")
+                print(f"\n\033[1;32m[SUCCESS] Successfully processed changeset no. {changeset_id} (took {changeset_time:.2f} seconds).\033[0m")
+
             else:
                 failure_count += 1
-                print(f"\033[1;31m[FAILURE] Failed to process changeset {changeset_id}.\033[0m")
+                print(f"\n\033[1;31m[FAILURE] Failed to process changeset no. {changeset_id}.\033[0m")
                 
-            # Calculate estimated time remaining
+            # Calculates estimated time remaining.
             elapsed_time = time.time() - start_time
             changesets_left = total_changesets - (index + 1)
             avg_time_per_changeset = elapsed_time / (index + 1)
             estimated_time_left = avg_time_per_changeset * changesets_left
             
-            # Format as hours:minutes:seconds
+            # Formats as 'hours:minutes:seconds'.
             hours, remainder = divmod(estimated_time_left, 3600)
             minutes, seconds = divmod(remainder, 60)
             
-            print(f"\nProgress: {index+1}/{total_changesets} changesets processed ({progress:.1f}%)")
-            print(f"Status: {success_count} successful, {failure_count} failed")
-            print(f"Elapsed time: {elapsed_time:.2f} seconds")
-            print(f"Estimated time remaining: {int(hours)}h {int(minutes)}m {int(seconds)}s")
+            print(f"\n• Progress: {index+1}/{total_changesets} changesets processed ({progress:.1f}%)")
+            print(f"• Status: {success_count} successful, {failure_count} failed")
+            print(f"• Elapsed time: {elapsed_time:.2f} seconds")
+            print(f"• Estimated time remaining: {int(hours)}h {int(minutes)}m {int(seconds)}s")
                 
         except Exception as e:
             failure_count += 1
-            print(f"\033[1;31m[ERROR] Exception while processing changeset {changeset_id}: {str(e)}\033[0m")
+            print(f"\033[1;31m[ERROR] An error occurred while processing changeset no. {changeset_id}: {e}\033[0m")
             traceback.print_exc()
     
-    # Final summary - only reached if we process all changesets
     total_time = time.time() - start_time
-    print("\n" + "=" * 100)
-    print("MIGRATION SUMMARY")
-    print("=" * 100)
-    print(f"Total changesets: {total_changesets}")
-    print(f"Successfully processed: {success_count}")
-    print(f"Failed: {failure_count}")
-    print(f"Total time: {total_time:.2f} seconds")
-    
-    # Calculate success rate
-    if total_changesets > 0:
-        success_rate = (success_count / total_changesets) * 100
-        print(f"Success rate: {success_rate:.2f}%")
+    print("\n" + "\033[1m=\033[0m" * 100)
+    print("\033[1mMIGRATION SUMMARY\033[0m")
+    print("\033[1m=\033[0m" * 100)
+    print(f"• Total changesets: {total_changesets}")
+    print(f"• Successful migration: {success_count}")
+    print(f"• Failed migration: {failure_count}")
+    print(f"• Total time: {total_time:.2f} seconds")
     
     return success_count, failure_count, None
 
 if __name__ == "__main__":
-    process_repository_changesets()
+    process_repository_changesets(history_file="C:\\Users\\maxim\\history.txt")

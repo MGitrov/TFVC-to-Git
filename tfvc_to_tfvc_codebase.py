@@ -1,7 +1,6 @@
 import subprocess
 import re
 import os
-import sys
 import threading
 import io
 import shutil
@@ -38,7 +37,7 @@ PREREQUISITES:
 source_collection = "https://dev.azure.com/maximpetrov2612"
 target_collection = "https://dev.azure.com/maximpetrov1297"
 source_server_path = "$/TFS-based test project"
-target_server_path = "$/Magnolia"
+target_server_path = "$/Tulip"
 local_source_path = "P:\Work\Migration\SourcePath"
 local_target_path = "P:\Work\Migration\TargetPath"
 
@@ -355,15 +354,15 @@ def save_migration_state(last_processed_changeset, branch_changeset, all_changes
         remaining_changesets = []
     
     state_data = {
-        "• Last processed changeset": last_processed_changeset,
-        "• Branch creation changeset": branch_changeset,
-        "• Timestamp": timestamp,
-        "• Resume from changeset no.": branch_changeset + 1,
-        "• Source collection (or organization)": source_collection,
-        "• Source server path": source_server_path,
-        "• Target collection (or organization)": target_collection,
-        "• Target server path": target_server_path,
-        "• Remaining changesets (assign this list to the 'all_changesets' variable in the 'process_repository_changesets' function to continue)": remaining_changesets
+        "Last processed changeset": last_processed_changeset,
+        "Branch creation changeset": branch_changeset,
+        "Timestamp": timestamp,
+        "Resume from changeset no.": branch_changeset + 1,
+        "Source collection (or organization)": source_collection,
+        "Source server path": source_server_path,
+        "Target collection (or organization)": target_collection,
+        "Target server path": target_server_path,
+        "Remaining changesets": remaining_changesets
     }
     
     # Save the state information to a JSON file
@@ -376,47 +375,46 @@ def save_migration_state(last_processed_changeset, branch_changeset, all_changes
     instructions_file_path = os.path.join(script_directory, f"migration_instructions_{timestamp}.txt")
 
     with open(instructions_file_path, "w") as instructions_file:
-        instructions_file.write("\033[1m=\033[0m" * 100)
+        instructions_file.write("=" * 100 + "\n")  # Added newline
         instructions_file.write(f"TFVC MIGRATION PAUSED - BRANCH CREATION DETECTED\n")
-        instructions_file.write("\033[1m=\033[0m" * 100 + "\n")
+        instructions_file.write("=" * 100 + "\n")
         
-        instructions_file.write(f"Migration paused at: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        instructions_file.write(f"Migration paused at: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
         
         instructions_file.write("CURRENT STATE:\n")
-        instructions_file.write(f"• Last successfully processed changeset: {last_processed_changeset}")
-        instructions_file.write(f"• Branch creation changeset requiring manual handling: {branch_changeset}\n")
+        instructions_file.write(f"• Last successfully processed changeset: {last_processed_changeset}\n")
+        instructions_file.write(f"• Branch creation changeset requiring manual handling: {branch_changeset}\n\n")
         
         instructions_file.write("MANUAL STEPS REQUIRED (PARENT BRANCH):\n")
-        instructions_file.write(f"1. From your local source path ('{local_source_path}'), execute 'tf get \"{source_server_path}\" /version:C{branch_changeset} /recursive /force'.")
-        instructions_file.write(f"2. Once fetched, copy all the contents of the '{local_source_path}' directory to the '{local_target_path}' directory.")
-        instructions_file.write("3. Execute 'tf add * /recursive'.")
-        instructions_file.write("4. Execute 'tf checkin /comment:<your_comment_here> /noprompt'.")
-        instructions_file.write("5. From Visual Studio, convert the parent folder to a branch.\n")
-
+        instructions_file.write(f"1. From your local source path ('{local_source_path}'), execute 'tf get \"{source_server_path}\" /version:C{branch_changeset} /recursive /force'.\n")
+        instructions_file.write(f"2. Once fetched, copy all the contents of the '{local_source_path}' directory to the '{local_target_path}' directory.\n")
+        instructions_file.write(f"3. From your local target path ('{local_target_path}'), execute 'tf add * /recursive'.\n")
+        instructions_file.write("4. Execute 'tf checkin /comment:<your_comment_here> /noprompt'.\n")
+        instructions_file.write("5. From Visual Studio, convert the parent folder to a branch.\n\n")
+        
         instructions_file.write("MANUAL STEPS REQUIRED (NON-PARENT BRANCH):\n")
-        instructions_file.write(f"1. From your local target path ('{local_target_path}'), execute 'tf branch '<parent_branch_target_server_path (e.g., $/...)>' '<new_branch_target_server_path (e.g., $/...)>''.")
-        instructions_file.write("2. Execute 'tf checkin /comment:<your_comment_here> /noprompt'.\n")
-
+        instructions_file.write(f"1. From your local target path ('{local_target_path}'), execute 'tf branch '<parent_branch_target_server_path (e.g., $/...)>' '<new_branch_target_server_path (e.g., $/...)>''.\n")
+        instructions_file.write("2. Execute 'tf checkin /comment:<your_comment_here> /noprompt'.\n\n")
+        
         instructions_file.write("MANUAL STEPS REQUIRED (NESTED BRANCH - BRANCH WITHIN A FOLDER):\n")
-        instructions_file.write(f"1. In your local target path ('{local_target_path}'), create the folder (either using the 'mkdir' command or UII) in which the branch resides.")
-        instructions_file.write("2. Execute 'tf checkin /comment:<your_comment_here> /noprompt'.")
-        instructions_file.write("3. Follow the 'non-parent branch' steps.\n")
+        instructions_file.write(f"1. In your local target path ('{local_target_path}'), create the folder (either using the 'mkdir' command or UI) in which the branch resides.\n")
+        instructions_file.write("2. Execute 'tf add * /recursive'.\n")
+        instructions_file.write("3. Execute 'tf checkin /comment:<your_comment_here> /noprompt'.\n")
+        instructions_file.write("4. Follow the 'non-parent branch' steps.\n\n")
         
         instructions_file.write("TO RESUME MIGRATION:\n")
-        instructions_file.write(f"• Resume the script with changeset no. {branch_changeset + 1}.")
-        instructions_file.write(f"• Resume the script with changeset no. {branch_changeset + 1}.")
-        instructions_file.write(f"• Assign the 'Remaining changesets' list to the 'all_changesets' variable in the 'process_repository_changesets' function.\n")
+        instructions_file.write(f"• Resume the script with changeset no. {branch_changeset + 1}.\n")
+        instructions_file.write(f"• Assign the 'Remaining changesets' list to the 'all_changesets' variable in the 'process_repository_changesets' function.\n\n")
         
         instructions_file.write("REPOSITORY DETAILS:\n")
-        instructions_file.write(f"• Source collection (or organization): {source_collection}")
-        instructions_file.write(f"• Source server path: {source_server_path}")
-        instructions_file.write(f"• Target collection (or organization): {target_collection}")
-        instructions_file.write(f"• Target server path: {target_server_path}\n")
+        instructions_file.write(f"• Source collection (or organization): {source_collection}\n")
+        instructions_file.write(f"• Source server path: {source_server_path}\n")
+        instructions_file.write(f"• Target collection (or organization): {target_collection}\n")
+        instructions_file.write(f"• Target server path: {target_server_path}\n\n")
         
         instructions_file.write("REMAINING CHANGESETS TO PROCESS:\n")
         if remaining_changesets:
             instructions_file.write(f"• Remaining changesets: {remaining_changesets}\n")
-
         else:
             instructions_file.write("• No remaining changesets (branch creation was the last changeset).\n")
     
@@ -424,41 +422,6 @@ def save_migration_state(last_processed_changeset, branch_changeset, all_changes
     print(f"\033[1;33m[INFO] Migration state saved to: {state_file_path}\033[0m")
     print(f"\033[1;33m[INFO] Instructions for resuming migration saved to: {instructions_file_path}\033[0m")
     print("\033[1m!\033[0m" * 100)
-
-def handle_branch_creation_changeset(changeset_id, last_processed_changeset, all_changesets):
-    """
-    Handles a branch creation changeset by pausing the script and providing instructions.
-    
-    Args:
-        changeset_id: The ID of the branch creation changeset
-        last_processed_changeset: The ID of the last successfully processed changeset
-        all_changesets: The complete list of changesets from the history file
-    """
-    print("\n" + "\033[1m=\033[0m" * 100)
-    print(f"\033[1;33m[BRANCH CREATION DETECTED] Changeset {changeset_id} creates a new branch\033[0m")
-    print("\033[1m=\033[0m" * 100)
-    
-    # Get branch details for user reference
-    branch_details = execute_tf_command(
-        f"changeset {changeset_id} /collection:{source_collection} /noprompt"
-    )
-    
-    # Save current migration state with the list of remaining changesets
-    save_migration_state(last_processed_changeset, changeset_id, all_changesets)
-    
-    print("\n\033[1;33m[MANUAL ACTION REQUIRED] This changeset creates a new branch and needs manual handling.\033[0m")
-    print("\n\033[1;33mBranch creation details:\033[0m")
-    print(branch_details)
-    
-    print("\n\033[1;33mPlease follow these steps:\033[0m")
-    print("1. Create the branch in the target repository manually")
-    print("2. Check in the branch creation")
-    print("3. Verify the branch structure is correct")
-    print(f"4. Resume the script with changeset {changeset_id + 1}")
-    print(f"   Command: python tfvc_to_tfvc_codebase.py --start-changeset {changeset_id + 1}")
-    
-    # Exit the script with a special code indicating manual intervention is needed
-    sys.exit(42)  # Using 42 as a special exit code to indicate manual steps needed
 
 def process_repository_changesets(history_file):
     """
@@ -473,7 +436,7 @@ def process_repository_changesets(history_file):
     
     # Fetches all changesets from repository's history file.
     start_time = time.time()
-    all_changesets = [17, 18]#parse_history_file(history_file=history_file)
+    all_changesets = [13, 14, 15, 16, 17, 18]#parse_history_file(history_file=history_file)
     parse_time = time.time() - start_time
     
     if not all_changesets:
@@ -496,14 +459,14 @@ def process_repository_changesets(history_file):
         # Checks whether this is an any branch creation changeset.
         if changeset_id in parent_branch_creation_changesets:
             print(f"\n\033[1;33m[BRANCH CREATION DETECTED] Changeset {changeset_id} is a parent (trunk) branch creation changeset.\033[0m")
-            handle_branch_creation_changeset(changeset_id, last_processed_changeset, all_changesets)
+            save_migration_state(last_processed_changeset, changeset_id, all_changesets)
             
             # The script will exit within the 'handle_branch_creation_changeset' function, but just in case.
             return success_count, failure_count, changeset_id
             
         if changeset_id in branch_creation_changesets:
             print(f"\n\033[1;33m[BRANCH CREATION DETECTED] Changeset {changeset_id} is a branch creation (non-parent) changeset.\033[0m")
-            handle_branch_creation_changeset(changeset_id, last_processed_changeset, all_changesets)
+            save_migration_state(last_processed_changeset, changeset_id, all_changesets)
             
             # The script will exit within the 'handle_branch_creation_changeset' function, but just in case.
             return success_count, failure_count, changeset_id

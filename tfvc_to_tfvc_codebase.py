@@ -2,6 +2,8 @@ import subprocess
 import re
 import os
 import sys
+import threading
+import io
 import shutil
 import time
 import datetime
@@ -24,11 +26,11 @@ CLARIFICATIONS:
     once the 'tf branch' command is executed).
 
 PREREQUISITES:
-• Parent (trunk) branches' first changeset.
+• Parent (trunk) branches' first changeset - the 'parent_branch_creation_changesets' list has to be filled.
     The branch hierarchy can be viewed using either the 'git tfs list-remote-branches <collectionURL>' command, or Visual Studio.
     The parent branch is migrated as a regular changeset, and once migrated will be converted to a branch via Visual Studio.
 
-• The first changeset of all other branches.
+• The first changeset of all other branches - the 'branch_creation_changesets' list has to be filled.
 • An history file of the source TFVC repository.
     Command: tf history '<source_server_path (e.g., $/...)>' /recursive /noprompt /format:detailed /collection:<collectionURL> > history.txt
 """
@@ -40,43 +42,23 @@ target_server_path = "$/Magnolia"
 local_source_path = "P:\Work\Migration\SourcePath"
 local_target_path = "P:\Work\Migration\TargetPath"
 
+# A list that holds the changeset IDs of parent (trunk) branch creation.
 parent_branch_creation_changesets = [6]
-branch_creation_changesets = [7, 11, 12]
 
-# There is a need to figure out what changesets are branch creation changeset as it requires a different handling.
-branch_creation_changesets = {
-    # 'Folder_1-branch' branch.
-    7: {
-        "source_path": "$/NiceVision",
-        "target_path": "$/NiceVision/VA",
-        "comment": "Creating VA branch"
-    },
-    # 'Exodus' branch.
-    11: {
-        "source_path": "$/NiceVision",
-        "target_path": "$/NiceVision/AppGroup/Trunk",
-        "comment": "Creating Trunk branch"
-    },
-    # 'tulip' branch.
-    12: {
-        "source_path": "$/NiceVision",
-        "target_path": "$/NiceVision/AppGroup/Trunk",
-        "comment": "Creating Trunk branch"
-    }
-}
+# A list that holds the changeset IDs of non-parent (branch from other branches) branch creation.
+branch_creation_changesets = [7, 11, 12]
 
 def execute_tf_command(command, capture_output=True):
     """
-    This function executes a 'TF' command with improved error handling for already-tracked files
-    and progress display for 'get' operations.
+    This function executes a 'TF' command with improved error handling for already-tracked files, and progress display for the 'tf get' command.
     """
-    print(f"Executing the following command: tf {command}")
+    print(f"[COMMAND EXECUTION] Executing the following command: tf {command}")
     
-    # Check if this is a 'get' command with potential for long-running operation
+    # Checks whether this is a 'get' command as it is handled differently.
     if ('get' in command and '/recursive' in command) or 'get /version' in command:
-        return execute_tf_get_with_progress(command)
+        return execute_tf_get_command(command)
     
-    # Standard command execution for non-get commands
+    # Standard command execution for non-get commands.
     try:
         result = subprocess.run(f"tf {command}", shell=True,
                                capture_output=capture_output, text=True, check=True)
@@ -93,6 +75,7 @@ def execute_tf_command(command, capture_output=True):
             if file_match:
                 file_path = file_match.group(1)
                 print(f"\n\033[1;33m[INFO] File '${file_path}' is already tracked by TFVC and was not added in this changeset.\033[0m")
+
             else:
                 print(f"\n\033[1;33m[INFO] Some files are already tracked by TFVC and were not added in this changeset.\033[0m")
             
@@ -105,7 +88,7 @@ def execute_tf_command(command, capture_output=True):
                 return True
                 
             else:
-                # For non-add commands, still show the error but in warning color
+                # For non-add commands, the message displayed as a warning message to indicate that there is a conflict in the pending changes that TFVC cannot automatically resolve.
                 print(f"\n\033[1;38;5;214m[WARNING] Command returned non-zero exit status: {e}\033[0m")
                 
                 if capture_output:
@@ -119,30 +102,32 @@ def execute_tf_command(command, capture_output=True):
                 print(f"\033[1;31m[ERROR] Output: {e.stderr}\033[0m\n")
             return None
 
-def execute_tf_get_with_progress(command):
+def execute_tf_get_command(command):
     """
-    Execute 'tf get' command with a simple progress indicator showing that the command is still running.
-    Doesn't try to parse the output, just shows elapsed time and activity.
+    This function executes the 'tf get' command with a progress indicator showing that the command is still running (helpful for large repositories).
     """
-    print("Starting file retrieval (this may take some time for large repositories)...")
+    print("[INFO] Starting file retrieval (this may take some time for large repositories)...")
     
-    # Start process in background
     start_time = time.time()
-    
-    # Use a thread to run the command and capture output
-    import threading
-    import io
     
     output = io.StringIO()
     error_output = io.StringIO()
-    return_code = [0]  # Use a list to store the return code so it can be modified by the thread
+    return_code = [0]  # A list to store the exit status - used by the thread function to communicate to the main thread.
     
+    """
+    A separate thread execution that executes the 'tf get' command.
+    The threading approach is necessary because Python's standard 'subprocess.run()' function is blocking - it would stop all execution until the command completes, 
+    preventing any progress updates.
+
+    Using a separate thread, the main Python thread remains responsive, allowing us to update the progress display.
+    """
     def run_command():
         try:
             process = subprocess.run(f"tf {command}", shell=True, capture_output=True, text=True, check=False)
             output.write(process.stdout)
             error_output.write(process.stderr)
             return_code[0] = process.returncode
+
         except Exception as e:
             error_output.write(f"Exception occurred: {str(e)}")
             return_code[0] = -1
@@ -150,9 +135,8 @@ def execute_tf_get_with_progress(command):
     thread = threading.Thread(target=run_command)
     thread.start()
     
-    # Simple animation while the command is running
-    animation = "|/-\\"
-    idx = 0
+    spinners = ['⣾', '⣷', '⣯', '⣟', '⡿', '⢿', '⣻', '⣽']
+    index = 0
     
     while thread.is_alive():
         elapsed = time.time() - start_time
@@ -160,29 +144,28 @@ def execute_tf_get_with_progress(command):
         hours, mins = divmod(mins, 60)
         
         time_str = f"{hours:02d}:{mins:02d}:{secs:02d}"
-        print(f"\rRetrieving files {animation[idx]} [Elapsed: {time_str}]", end="", flush=True)
+        print(f"\rRetrieving files {spinners[index]} [Elapsed: {time_str}]", end="", flush=True)
         
-        idx = (idx + 1) % len(animation)
-        time.sleep(0.5)  # Update twice per second
+        index = (index + 1) % len(spinners) # Ensures the index wraps around to zero after reaching the end of the array, creating a continuous animation loop.
+        time.sleep(0.1)  # Updates 10 times per second for smoother animation.
     
-    # Command has completed
     elapsed_time = time.time() - start_time
     mins, secs = divmod(int(elapsed_time), 60)
     hours, mins = divmod(mins, 60)
     time_str = f"{hours:02d}:{mins:02d}:{secs:02d}"
     
-    print(f"\rOperation completed in {time_str} {'  ' * 10}")
+    print(f"\rOperation completed in {time_str} {'  ' * 10}.")
     
-    # Check for errors
     if return_code[0] != 0:
-        print(f"\n\033[1;31m[ERROR] Command failed with return code {return_code[0]}\033[0m")
+        print(f"\n\033[1;31m[ERROR] The 'tf get' command failed with return code {return_code[0]}.\033[0m")
         error_text = error_output.getvalue()
+
         if error_text:
-            print(f"\033[1;31m[ERROR] Error output: {error_text}\033[0m")
+            print(f"\033[1;31m[ERROR] Output: {error_text}.\033[0m")
         return None
     
-    # Return the captured output
-    return output.getvalue()
+    return output.getvalue() # The '.getvalue()' method retrieves all the text that has been accumulated in the StringIO buffer and returns it as a single string. 
+    # It is converting the in-memory text stream back into a regular Python string that can be used by the rest of the script.
 
 def parse_history_file(history_file):
     """
@@ -312,7 +295,7 @@ def copy_files_recursively(source_local_directory, target_local_directory):
             # Copy the file
             shutil.copy2(source_item, dest_item)
 
-def add_file_safely(file_path):
+def add_file_safely(file_path): # DEPRECATED.
     """Attempts to add a file to TFVC safely, handling edge cases."""
     
     # Step 1: Undo pending changes if any exist
@@ -335,19 +318,19 @@ def add_file_safely(file_path):
     print(f"✅ Adding new file: {file_path}")
     execute_tf_command(f'add "{file_path}"')
 
-def is_file_tracked(file_path):
+def is_file_tracked(file_path): # DEPRECATED.
     """
     Checks if a file already exists in TFVC using 'tf get'.
     """
     output = execute_tf_command(f'get "{file_path}" /preview')
     return "All files are up to date" in output or "Replacing" in output
 
-def has_pending_changes(file_path):
+def has_pending_changes(file_path): # DEPRECATED.
     """Checks if the file has pending changes using 'tf status'."""
     output = execute_tf_command(f'status "{file_path}" /format:detailed /noprompt')
     return "edit" in output.lower() or "add" in output.lower() # return true because of "candidate changes"
 
-def was_file_deleted(file_path):
+def was_file_deleted(file_path): # DEPRECATED.
     """Checks if a file was previously deleted using 'tf history'."""
     output = execute_tf_command(f'history "{file_path}" /noprompt')
     return "delete" in output.lower()

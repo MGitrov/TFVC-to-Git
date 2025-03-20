@@ -396,6 +396,11 @@ def save_migration_state(last_processed_changeset, branch_changeset, all_changes
         instructions_file.write("MANUAL STEPS REQUIRED (NON-PARENT BRANCH):\n")
         instructions_file.write(f"1. From your local target path ('{local_target_path}'), execute 'tf branch '<parent_branch_target_server_path (e.g., $/...)>' '<new_branch_target_server_path (e.g., $/...)>''.")
         instructions_file.write("2. Execute 'tf checkin /comment:<your_comment_here> /noprompt'.\n")
+
+        instructions_file.write("MANUAL STEPS REQUIRED (NESTED BRANCH - BRANCH WITHIN A FOLDER):\n")
+        instructions_file.write(f"1. In your local target path ('{local_target_path}'), create the folder (either using the 'mkdir' command or UII) in which the branch resides.")
+        instructions_file.write("2. Execute 'tf checkin /comment:<your_comment_here> /noprompt'.")
+        instructions_file.write("3. Follow the 'non-parent branch' steps.\n")
         
         instructions_file.write("TO RESUME MIGRATION:\n")
         instructions_file.write(f"• Resume the script with changeset no. {branch_changeset + 1}.")

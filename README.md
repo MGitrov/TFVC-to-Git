@@ -4,6 +4,7 @@
   - [Processes Migration](#one-processes-migration)
   - [Work Items (Boards, Backlogs, and Sprints), Iterations and Areas, and Teams Migration](#two-work-items-boards-backlogs-and-sprints-iterations-and-areas-and-teams-migration)
   - [Branches and Changesets Migration](#three-branches-and-changesets-migration)
+  - [Pipelines Migration](#four-pipelines-migration)
   - [Shared Queries Migration](#four-shared-queries-migration)
   - [Dashboards Migration](#five-dashboards-migration)
   - [Assign Users To Teams](#six-assign-users-to-teams)
@@ -188,15 +189,62 @@ git remote add origin https://dev.azure.com/<your_organization_name>/<your_proje
   * In this sub-step, ensure you are able to authenticate via the CLI in order to ```push``` to the remote repository.
 
 ### :four: Pipelines Migration
+![usedToolBadge](https://img.shields.io/badge/Tool-CodeWizard%20Script-blue?style=for-the-badge)
+
 A Pipeline in Azure DevOps is a workflow automation tool that allows you to build, test, and deploy your code automatically.
 
 **Types of Pipelines:**
 * **Build Pipelines:** Focus on compiling code, running tests, and creating build artifacts.
   * There are two types of build pipelines:
     * **Classic Pipelines:** Stored as configuration data in Azure DevOps database, not as part of the codebase.
-    * **YAML Pipelines:** Defined as code using a YAML file part of the codebase.
+    * **YAML Pipelines:** Defined as code using a YAML file, part of the codebase.
 * **Release Pipelines:** Focus on deploying build artifacts to environments, such as staging or production.
   * Example: Deploy a Docker image to a Kubernetes cluster.
+
+**Task Groups (must be migrated prior to pipelines):**
+
+![usedToolBadge](https://img.shields.io/badge/Tool-tfvc__to__git__pipelines__task__groups.py-blue?style=social)
+
+A task group is a reusable collection of build/release tasks shared across multiple pipelines. Task groups are stored as organizational-level resources, not within project repositories.
+
+Task groups must be migrated separately from pipelines, as dependent pipelines will break if task groups are not migrated before pipeline execution.
+
+The ```tfvc_to_git_pipelines_task_groups.py``` script handles the migration of task groups and their nested task groups (if a task group is a task within another task group, the script will maintain this linkage).
+
+**Variable Groups (must be migrated prior to pipelines):**
+
+![usedToolBadge](https://img.shields.io/badge/Tool-tfvc__to__git__pipelines__variable__groups.py-blue?style=social)
+
+A variable group is a centralized collection of variables shared across multiple pipelines.
+
+Secret variables cannot be automatically migrated with standard tools as they store sensitive information (e.g., passwords, connection strings) as encrypted secrets, and hence they have to be recreated manually in the target environment.
+
+The ```tfvc_to_git_pipelines_variable_groups.py``` script handles the migration of non-secret variables.
+
+**4.1. Build Pipelines:**
+
+  **4.1.1. Classic Build Pipelines:**
+
+  **4.1.1.1. TFVC-based -> Git-based:**
+  
+  ![usedToolBadge](https://img.shields.io/badge/Tool-tfvc__to__git__classic__pipelines.py-blue?style=social)
+
+  The ```tfvc_to_git_classic_pipelines.py``` script converts classic build pipelines that reference TFVC repositories to use Git repositories instead.
+
+  **4.1.1.2. TFVC-based -> TFVC-based:**
+  
+  ![usedToolBadge](https://img.shields.io/badge/Tool-tfvc__to__tfvc__classic__pipelines.py-blue?style=social)
+
+  The ```tfvc_to_git_classic_pipelines.py``` script migrates classic build pipelines between TFVC repositories while maintaining the TFVC structure.
+
+  **4.1.2. YAML Build Pipelines:**
+  
+  :construction: **UNDER CONSTRUCTION!**
+  
+------------------------------
+**4.2. Release Pipelines:**
+
+:construction: **UNDER CONSTRUCTION!**
 
 ### :four: Shared Queries Migration
 :purple_circle: Will be migrated using Azure DevOps Migration Tools.

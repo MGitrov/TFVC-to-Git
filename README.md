@@ -52,10 +52,10 @@ A process in an Azure DevOps Server is configured using an XML file, and it is n
 
 Export the process' XML configuration file using the following ```witadmin``` command :link: [**READ BEFORE EXECUTING!**](https://learn.microsoft.com/en-us/azure/devops/reference/witadmin/witadmin-import-export-process-configuration?view=azure-devops):
 ``` bash
-witadmin exportprocessconfig /collection:CollectionURL /p:ProjectName /f:"DirectoryPath\ProcessConfiguration.xml"
+witadmin exportprocessconfig /collection:<collection_url> /p:<project_name> /f:"DirectoryPath\ProcessConfiguration.xml"
 ```
-* Replace ```CollectionURL``` with your Azure DevOps Server collection URL.
-* Replace ```ProjectName``` with your project's name within the collection.
+* Replace ```<collection_url>``` with your Azure DevOps Server collection URL.
+* Replace ```<project_name>``` with your project's name within the collection.
 * ```"DirectoryPath\ProcessConfiguration.xml"``` will export the XML file to your current working directory, can be modified as well.
 
 ### :two: Work Items (Boards, Backlogs, and Sprints), Iterations and Areas, and Teams Migration

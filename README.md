@@ -63,6 +63,12 @@ witadmin exportprocessconfig /collection:<collection_url> /p:<project_name> /f:"
 ### :two: Feeds Migration
 ![usedToolBadge](https://img.shields.io/badge/Tool-tfvc__to__git__artifacts.py-blue?style=social)
 
+Artifacts Feeds provide secure and private package management for your organization. They store and distribute packages (e.g., NuGet, npm, Maven) that your projects depend on, enabling versioning, access control, and simplified dependency management. Feeds can host both private packages developed by your team and cached copies of public packages, ensuring reliable builds while maintaining control over which external dependencies are approved for use.
+
+:warning: **Prior to the execution of the ```tfvc_to_git_artifacts.py``` script, make sure the feed itself, its views and upstream source(s) are created in the target organization.**
+
+The ```tfvc_to_git_artifacts.py``` script handles the migration of feeds' packages, but only packages with source configured as 'This feed'. This is because packages with source configured as a public source are available through the public source, and Azure DevOps will reject its migration (unless the specific public source is not configured for the feed).
+
 ### :three: Work Items (Boards, Backlogs, and Sprints), Iterations and Areas, and Teams Migration
 
 ![usedToolBadge](https://img.shields.io/badge/Tool-Azure%20DevOps%20Migration%20Tools-blue?style=for-the-badge&labelColor=orange)
@@ -262,7 +268,7 @@ The ```tfvc_to_git_pipelines_variable_groups.py``` script handles the migration 
 ### :seven: Shared Queries Migration (must be migrated prior to dashboards)
 ![usedToolBadge](https://img.shields.io/badge/Tool-Azure%20DevOps%20Migration%20Tools-blue?style=for-the-badge&labelColor=orange)
 
-:warning: **Migration only available for shared queries.**
+:warning: **Migration only available for shared queries, not private queries.**
 
 :warning: **Shared queries migration requires adjusting the ```EndpointType``` field, and hence this migration type will be handled in a separate JSON configuration file.**
 
@@ -280,9 +286,9 @@ devopsmigration execute --config .\shared-queries.json
 ### :eight: Dashboards Migration
 ![usedToolBadge](https://img.shields.io/badge/Tool-tfvc__to__git__dashboards.py-blue?style=social)
 
-:warning: **Prior to the execution of the ```tfvc_to_git_dashboards.py``` script, make sure all the relevant third party extensions (including widgets) are reinstalled in the target organization.**
-
 Dashboards are customizable, interactive panels that provide teams with a consolidated view of important project metrics, progress, and tools. Dashboards are associated with specific teams and can be tailored to display relevant widgets like sprint burndown charts, work item queries, team member details, and build pipeline summaries. They serve as a central hub for monitoring project health, team performance, and delivery timelines.
+
+:warning: **Prior to the execution of the ```tfvc_to_git_dashboards.py``` script, make sure all the relevant third party extensions (including widgets) are reinstalled in the target organization.**
 
 ### :nine: Assign Users To Teams
 ![usedToolBadge](https://img.shields.io/badge/Tool-tfvc__to__git__user__to__team.py-blue?style=social)

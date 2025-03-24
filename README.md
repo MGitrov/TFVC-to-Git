@@ -6,8 +6,8 @@
   - [Branches and Changesets Migration](#three-branches-and-changesets-migration)
   - [Pipelines Migration](#four-pipelines-migration)
   - [Test Artifacts (Shared Parameters, Shared Steps, Test Plans, Test Suites and Test Cases) Migration](#five-test-artifacts-shared-parameters-shared-steps-test-plans-test-suites-and-test-cases-migration)
-  - [Shared Queries Migration](#four-shared-queries-migration)
-  - [Dashboards Migration](#five-dashboards-migration)
+  - [Shared Queries Migration](#six-shared-queries-migration)
+  - [Dashboards Migration](#seven-dashboards-migration)
   - [Assign Users To Teams](#six-assign-users-to-teams)
 
 
@@ -251,8 +251,8 @@ The ```tfvc_to_git_pipelines_variable_groups.py``` script handles the migration 
 
 :construction: **UNDER CONSTRUCTION!**
 
-### :four: Shared Queries Migration
-:purple_circle: Will be migrated using Azure DevOps Migration Tools.
+### :six: Shared Queries Migration (must be migrated prior to dashboards)
+![usedToolBadge](https://img.shields.io/badge/Tool-Azure%20DevOps%20Migration%20Tools-blue?style=for-the-badge)
 
 :warning: **Migration only available for shared queries.**
 
@@ -260,7 +260,7 @@ The ```tfvc_to_git_pipelines_variable_groups.py``` script handles the migration 
 
 Shared queries are pre-defined queries that allow teams to filter and view work items (e.g., tasks, bugs, user stories) based on specific criteria. These queries are shared across the team, making them a centralized and consistent way to track progress, identify issues, or prioritize work.
 
-In the provided ```shared-queries.json``` file in this repository ensure that the ```SharedFolderName``` (under "Processors") aligns with your shared queries' folder name in Azure DevOps (source project).
+In the provided ```shared-queries.json``` file in this repository ensure that the ```SharedFolderName``` (under "Processors") aligns with your source project's shared queries' folder name in Azure DevOps.
   ![image](https://github.com/user-attachments/assets/d6baa748-cdb4-430e-a5e0-965e3f40e07e)
 
 Shared queries migration will be handled using the provided ```shared-queries.json``` file in this repository. From your working directory run the following command:
@@ -269,7 +269,7 @@ devopsmigration execute --config .\shared-queries.json
 ```
 :warning: You may need to modify the ```shared-queries.json``` file to fit your specific needs - :link: [**DOCUMENTATION**](https://nkdagility.com/learn/azure-devops-migration-tools/).
 
-### :five: Dashboards Migration
+### :seven: Dashboards Migration
 :purple_circle: Will be migrated using CodeWizard's script.
 
 Dashboards are customizable, interactive panels that provide teams with a consolidated view of important project metrics, progress, and tools. Dashboards are associated with specific teams and can be tailored to display relevant widgets like sprint burndown charts, work item queries, team member details, and build pipeline summaries. They serve as a central hub for monitoring project health, team performance, and delivery timelines.

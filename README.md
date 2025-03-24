@@ -5,10 +5,10 @@
   - [Work Items (Boards, Backlogs, and Sprints), Iterations and Areas, and Teams Migration](#two-work-items-boards-backlogs-and-sprints-iterations-and-areas-and-teams-migration)
   - [Branches and Changesets Migration](#three-branches-and-changesets-migration)
   - [Pipelines Migration](#four-pipelines-migration)
+  - [Test Artifacts (Shared Parameters, Shared Steps, Test Plans, Test Suites and Test Cases) Migration](#five-test-artifacts-shared%parameters-backlogs-and-sprints-iterations-and-areas-and-teams-migration)
   - [Shared Queries Migration](#four-shared-queries-migration)
   - [Dashboards Migration](#five-dashboards-migration)
   - [Assign Users To Teams](#six-assign-users-to-teams)
-  - [Pipelines Migration](#seven-pipelines-migration)
 
 
 # Introduction
@@ -246,6 +246,11 @@ The ```tfvc_to_git_pipelines_variable_groups.py``` script handles the migration 
 
 :construction: **UNDER CONSTRUCTION!**
 
+### :five: Test Artifacts (Shared Parameters, Shared Steps, Test Plans, Test Suites and Test Cases) Migration
+![usedToolBadge](https://img.shields.io/badge/Tool-Azure%20DevOps%20Migration%20Tools-blue?style=for-the-badge)
+
+:construction: **UNDER CONSTRUCTION!**
+
 ### :four: Shared Queries Migration
 :purple_circle: Will be migrated using Azure DevOps Migration Tools.
 
@@ -271,18 +276,5 @@ Dashboards are customizable, interactive panels that provide teams with a consol
 
 ### :six: Assign Users To Teams
 :purple_circle: Will be implemented using CodeWizard's script.
-
-### :seven: Pipelines Migration
-Before we proceed with the migration, let's first understand what pipeline is.
-
-A Pipeline in Azure DevOps is a workflow automation tool that allows you to build, test, and deploy your code automatically.
-
-**Types of Pipelines:**
-* **Build Pipelines:** Focus on compiling code, running tests, and creating build artifacts.
-  * Example: Compile a Java application and package it into a ```.jar``` file.
-* **Release Pipelines:** Focus on deploying build artifacts to environments, such as staging or production.
-  * Example: Deploy a Docker image to a Kubernetes cluster.
-* **Multi-Stage Pipelines:** Combine both build and release processes into a single YAML-defined pipeline.
-  * Example: Build, test, and deploy a web application in one cohesive workflow.
 
  

@@ -61,7 +61,7 @@ witadmin exportprocessconfig /collection:<collection_url> /p:<project_name> /f:"
 
 ### :two: Work Items (Boards, Backlogs, and Sprints), Iterations and Areas, and Teams Migration
 
-![usedToolBadge](https://img.shields.io/badge/Tool-Azure%20DevOps%20Migration%20Tools-blue?style=for-the-badge)
+![usedToolBadge](https://img.shields.io/badge/Tool-Azure%20DevOps%20Migration%20Tools-blue?style=for-the-badge&labelColor=orange)
 
 :hourglass_flowing_sand: A migration of 2,400~ work items took two hours.
 
@@ -107,7 +107,7 @@ devopsmigration execute --config .\work-items.json
 :warning: You may need to modify the ```work-items.json``` file to fit your specific needs - :link: [**DOCUMENTATION**](https://nkdagility.com/learn/azure-devops-migration-tools/).
 
 ### :three: Branches and Changesets Migration
-![usedToolBadge](https://img.shields.io/badge/Tool-git%20tfs-blue?style=for-the-badge)
+![usedToolBadge](https://img.shields.io/badge/Tool-git--tfs-blue?style=for-the-badge&labelColor=orange)
 
 **3.1.** Start by cloning the TFVC-based repository to your local machine using the following commands:
 
@@ -189,7 +189,7 @@ git remote add origin https://dev.azure.com/<your_organization_name>/<your_proje
   * In this sub-step, ensure you are able to authenticate via the CLI in order to ```push``` to the remote repository.
 
 ### :four: Pipelines Migration
-![usedToolBadge](https://img.shields.io/badge/Tool-CodeWizard%20Script-blue?style=for-the-badge)
+![usedToolBadge](https://img.shields.io/badge/Tool-CodeWizard%20Script-blue?style=for-the-badge&labelColor=orange)
 
 :warning: **Prior to the execution of the ```tfvc_to_git_classic_pipelines.py``` or ```tfvc_to_tfvc_classic_pipelines.py``` script, make sure all the relevant service connections (per project) are reconfigured in the target organization.**
 
@@ -251,12 +251,12 @@ The ```tfvc_to_git_pipelines_variable_groups.py``` script handles the migration 
 :construction: **UNDER CONSTRUCTION!**
 
 ### :five: Test Artifacts (Shared Parameters, Shared Steps, Test Plans, Test Suites and Test Cases) Migration
-![usedToolBadge](https://img.shields.io/badge/Tool-Azure%20DevOps%20Migration%20Tools-blue?style=for-the-badge)
+![usedToolBadge](https://img.shields.io/badge/Tool-Azure%20DevOps%20Migration%20Tools-blue?style=for-the-badge&labelColor=orange)
 
 :construction: **UNDER CONSTRUCTION!**
 
 ### :six: Shared Queries Migration (must be migrated prior to dashboards)
-![usedToolBadge](https://img.shields.io/badge/Tool-Azure%20DevOps%20Migration%20Tools-blue?style=for-the-badge)
+![usedToolBadge](https://img.shields.io/badge/Tool-Azure%20DevOps%20Migration%20Tools-blue?style=for-the-badge&labelColor=orange)
 
 :warning: **Migration only available for shared queries.**
 

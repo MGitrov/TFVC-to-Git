@@ -187,6 +187,17 @@ git remote add origin https://dev.azure.com/<your_organization_name>/<your_proje
   * The ```--all``` flag ensures that all local branches are pushed to the remote repository.
   * In this sub-step, ensure you are able to authenticate via the CLI in order to ```push``` to the remote repository.
 
+### :four: Pipelines Migration
+A Pipeline in Azure DevOps is a workflow automation tool that allows you to build, test, and deploy your code automatically.
+
+**Types of Pipelines:**
+* **Build Pipelines:** Focus on compiling code, running tests, and creating build artifacts.
+  * There are two types of build pipelines:
+    * **Classic Pipelines:** Stored as configuration data in Azure DevOps database, not as part of the codebase.
+    * **YAML Pipelines:** Defined as code using a YAML file part of the codebase.
+* **Release Pipelines:** Focus on deploying build artifacts to environments, such as staging or production.
+  * Example: Deploy a Docker image to a Kubernetes cluster.
+
 ### :four: Shared Queries Migration
 :purple_circle: Will be migrated using Azure DevOps Migration Tools.
 

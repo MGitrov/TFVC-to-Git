@@ -2,13 +2,14 @@
 - [Prerequisites](#prerequisites)
 - [Getting Started](#getting-started-seedling)
   - [Processes Migration](#one-processes-migration)
-  - [Work Items (Boards, Backlogs, and Sprints), Iterations and Areas, and Teams Migration](#two-work-items-boards-backlogs-and-sprints-iterations-and-areas-and-teams-migration)
-  - [Branches and Changesets Migration](#three-branches-and-changesets-migration)
-  - [Pipelines Migration](#four-pipelines-migration)
-  - [Test Artifacts (Shared Parameters, Shared Steps, Test Plans, Test Suites and Test Cases) Migration](#five-test-artifacts-shared-parameters-shared-steps-test-plans-test-suites-and-test-cases-migration)
-  - [Shared Queries Migration](#six-shared-queries-migration-must-be-migrated-prior-to-dashboards)
-  - [Dashboards Migration](#seven-dashboards-migration)
-  - [Assign Users To Teams](#six-assign-users-to-teams)
+  - [Feeds Migration](#two-feeds-migration)
+  - [Work Items (Boards, Backlogs, and Sprints), Iterations and Areas, and Teams Migration](#three-work-items-boards-backlogs-and-sprints-iterations-and-areas-and-teams-migration)
+  - [Branches and Changesets Migration](#four-branches-and-changesets-migration)
+  - [Pipelines Migration](#five-pipelines-migration)
+  - [Test Artifacts (Shared Parameters, Shared Steps, Test Plans, Test Suites and Test Cases) Migration](#six-test-artifacts-shared-parameters-shared-steps-test-plans-test-suites-and-test-cases-migration)
+  - [Shared Queries Migration](#seven-shared-queries-migration-must-be-migrated-prior-to-dashboards)
+  - [Dashboards Migration](#eight-dashboards-migration)
+  - [Assign Users To Teams](#nine-assign-users-to-teams)
 
 
 # Introduction
@@ -59,7 +60,10 @@ witadmin exportprocessconfig /collection:<collection_url> /p:<project_name> /f:"
 * Replace ```<project_name>``` with your project's name within the collection.
 * ```"DirectoryPath\ProcessConfiguration.xml"``` will export the XML file to your current working directory, can be modified as well.
 
-### :two: Work Items (Boards, Backlogs, and Sprints), Iterations and Areas, and Teams Migration
+### :two: Feeds Migration
+![usedToolBadge](https://img.shields.io/badge/Tool-tfvc__to__git__artifacts.py-blue?style=social)
+
+### :three: Work Items (Boards, Backlogs, and Sprints), Iterations and Areas, and Teams Migration
 
 ![usedToolBadge](https://img.shields.io/badge/Tool-Azure%20DevOps%20Migration%20Tools-blue?style=for-the-badge&labelColor=orange)
 
@@ -106,10 +110,10 @@ devopsmigration execute --config .\work-items.json
 ```
 :warning: You may need to modify the ```work-items.json``` file to fit your specific needs - :link: [**DOCUMENTATION**](https://nkdagility.com/learn/azure-devops-migration-tools/).
 
-### :three: Branches and Changesets Migration
+### :four: Branches and Changesets Migration
 ![usedToolBadge](https://img.shields.io/badge/Tool-git--tfs-blue?style=for-the-badge&labelColor=orange)
 
-**3.1.** Start by cloning the TFVC-based repository to your local machine using the following commands:
+**4.1.** Start by cloning the TFVC-based repository to your local machine using the following commands:
 
 (Optional but recommended) List all available TFVC branches using the following command:
   ``` bash
@@ -121,7 +125,7 @@ Depending on the branches that has to be migrated, we will set the ```branches``
 
 * Cloning a TFVC-based repository from Azure DevOps Server (on-premises):
 
-  **3.1.1** Clone all branches and their related history using the following command:
+  **4.1.1** Clone all branches and their related history using the following command:
   ``` bash
   git tfs clone --branches=all http://tfs-server:8080/tfs/<your_collection_name> $/Project/Main
   ```
@@ -130,7 +134,7 @@ Depending on the branches that has to be migrated, we will set the ```branches``
   * Using the ```--branches=all``` flag will cause ```git-tfs``` to clone the entire repository with all the branches and their related history (less recommended for complex branch scenarios).
   * After the clone completion, a new Git directory (new Git repository) will be created named by the cloned branch.
 
-  **3.1.2** Clone a specified branch with its full history using the following command:
+  **4.1.2** Clone a specified branch with its full history using the following command:
   ``` bash
   git tfs clone --branches=none http://tfs-server:8080/tfs/<your_collection_name> $/Project/Main
   ```
@@ -141,7 +145,7 @@ Depending on the branches that has to be migrated, we will set the ```branches``
   * There might be cases that the whole history for the ```$/Project/Main``` branch will not be fetched initially. In such case you can run the ```git tfs fetch --all``` command to force ```git-tfs``` to recheck all the changesets for the branch and ensures no changes are missed.
   * After the clone completion, a Git new directory (new Git repository) will be created named by the cloned branch.
   
-    **3.1.2.1** Initialize and fetch additional branches with their full history using the following command:
+    **4.1.2.1** Initialize and fetch additional branches with their full history using the following command:
  
     :warning: By default, ```git-tfs``` tries to maintain the hierarchical relationships between TFVC branches. If the current branch you want to init and fetch was created as a child of some other branch, ```git-tfs``` considers the parent branch necessary to preserve the branch structure. **But**, pay attention to it as a manual intervention might be needed.
     ``` bash
@@ -150,7 +154,7 @@ Depending on the branches that has to be migrated, we will set the ```branches``
     * Replace ```$/Project/Main``` with a path to one of your repository's branch.
     * Repeat this command for every branch you need to be at the same Git repository.
 
-  **3.1.3** (Optional) Verify that the cloning went well using the ```git tfs verify --all``` command.
+  **4.1.3** (Optional) Verify that the cloning went well using the ```git tfs verify --all``` command.
 
 * Cloning a TFVC-based repository from Azure DevOps Services (cloud environment):
   1. Navigate from within the command prompt or terminal to the directory where you want to create the local repository.
@@ -162,7 +166,7 @@ Depending on the branches that has to be migrated, we will set the ```branches``
   * Replace ```$/Project/PathToTFVC``` with the TFVC repository path.
   * Replace ```{PAT}``` with your personal access token generated for your user in Azure DevOps.
 ------------------------------
-**3.2.** Verify the local Git repository using the following commands:
+**4.2.** Verify the local Git repository using the following commands:
 * Navigate to the cloned directory:
  ``` bash
   cd PathToLocalGitRepo
@@ -175,20 +179,20 @@ Depending on the branches that has to be migrated, we will set the ```branches``
  ``` bash
   git log
   ```
-**3.3.** Add the Azure DevOps Git repository as a remote using the following command:
+**4.3.** Add the Azure DevOps Git repository as a remote using the following command:
  ``` bash
 git remote add origin https://dev.azure.com/<your_organization_name>/<your_project_name>/_git/<your_repository_name>
   ```
   * The URL also can be taken from the project's web portal in Azure DevOps.
 
-**3.4.** Push the migrated history to Azure DevOps Git Repository using the following command:
+**4.4.** Push the migrated history to Azure DevOps Git Repository using the following command:
  ``` bash
   git push --all origin
   ```
   * The ```--all``` flag ensures that all local branches are pushed to the remote repository.
   * In this sub-step, ensure you are able to authenticate via the CLI in order to ```push``` to the remote repository.
 
-### :four: Pipelines Migration
+### :five: Pipelines Migration
 ![usedToolBadge](https://img.shields.io/badge/Tool-CodeWizard%20Script-blue?style=for-the-badge&labelColor=orange)
 
 :warning: **Prior to the execution of the ```tfvc_to_git_classic_pipelines.py``` or ```tfvc_to_tfvc_classic_pipelines.py``` script, make sure all the relevant service connections (per project) are reconfigured in the target organization.**
@@ -225,37 +229,37 @@ Secret variables cannot be automatically migrated with standard tools as they st
 
 The ```tfvc_to_git_pipelines_variable_groups.py``` script handles the migration of non-secret variables.
 
-**4.1. Build Pipelines:**
+**5.1. Build Pipelines:**
 
-  **4.1.1. Classic Build Pipelines:**
+  **5.1.1. Classic Build Pipelines:**
 
-  **4.1.1.1. TFVC-based -> Git-based:**
+  **5.1.1.1. TFVC-based -> Git-based:**
   
   ![usedToolBadge](https://img.shields.io/badge/Tool-tfvc__to__git__classic__pipelines.py-blue?style=social)
 
   The ```tfvc_to_git_classic_pipelines.py``` script converts classic build pipelines that reference TFVC repositories to use Git repositories instead.
 
-  **4.1.1.2. TFVC-based -> TFVC-based:**
+  **5.1.1.2. TFVC-based -> TFVC-based:**
   
   ![usedToolBadge](https://img.shields.io/badge/Tool-tfvc__to__tfvc__classic__pipelines.py-blue?style=social)
 
   The ```tfvc_to_tfvc_classic_pipelines.py``` script migrates classic build pipelines between TFVC repositories while maintaining the TFVC structure.
 
-  **4.1.2. YAML Build Pipelines:**
+  **5.1.2. YAML Build Pipelines:**
   
   :construction: **UNDER CONSTRUCTION!**
   
 ------------------------------
-**4.2. Release Pipelines:**
+**5.2. Release Pipelines:**
 
 :construction: **UNDER CONSTRUCTION!**
 
-### :five: Test Artifacts (Shared Parameters, Shared Steps, Test Plans, Test Suites and Test Cases) Migration
+### :six: Test Artifacts (Shared Parameters, Shared Steps, Test Plans, Test Suites and Test Cases) Migration
 ![usedToolBadge](https://img.shields.io/badge/Tool-Azure%20DevOps%20Migration%20Tools-blue?style=for-the-badge&labelColor=orange)
 
 :construction: **UNDER CONSTRUCTION!**
 
-### :six: Shared Queries Migration (must be migrated prior to dashboards)
+### :seven: Shared Queries Migration (must be migrated prior to dashboards)
 ![usedToolBadge](https://img.shields.io/badge/Tool-Azure%20DevOps%20Migration%20Tools-blue?style=for-the-badge&labelColor=orange)
 
 :warning: **Migration only available for shared queries.**
@@ -273,14 +277,14 @@ devopsmigration execute --config .\shared-queries.json
 ```
 :warning: You may need to modify the ```shared-queries.json``` file to fit your specific needs - :link: [**DOCUMENTATION**](https://nkdagility.com/learn/azure-devops-migration-tools/).
 
-### :seven: Dashboards Migration
+### :eight: Dashboards Migration
 ![usedToolBadge](https://img.shields.io/badge/Tool-tfvc__to__git__dashboards.py-blue?style=social)
 
 :warning: **Prior to the execution of the ```tfvc_to_git_dashboards.py``` script, make sure all the relevant third party extensions (including widgets) are reinstalled in the target organization.**
 
 Dashboards are customizable, interactive panels that provide teams with a consolidated view of important project metrics, progress, and tools. Dashboards are associated with specific teams and can be tailored to display relevant widgets like sprint burndown charts, work item queries, team member details, and build pipeline summaries. They serve as a central hub for monitoring project health, team performance, and delivery timelines.
 
-### :eight: Assign Users To Teams
+### :nine: Assign Users To Teams
 ![usedToolBadge](https://img.shields.io/badge/Tool-tfvc__to__git__user__to__team.py-blue?style=social)
 
 :warning: **Prior to the execution of the ```tfvc_to_git_user_to_team.py``` script, make sure all the relevant users exist in the target organization.**

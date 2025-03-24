@@ -283,6 +283,6 @@ Dashboards are customizable, interactive panels that provide teams with a consol
 ### :eight: Assign Users To Teams
 ![usedToolBadge](https://img.shields.io/badge/Tool-tfvc__to__git__user__to__team.py-blue?style=social)
 
-:warning: **Prior to the execution of the ```tfvc_to_git_user_to_team.py.py``` script, make sure all the relevant users exist in the target organization.**
+:warning: **Prior to the execution of the ```tfvc_to_git_user_to_team.py``` script, make sure all the relevant users exist in the target organization.**
 
- 
+The ```tfvc_to_git_user_to_team.py``` script handles the assignment of users to their respective teams, preserving the same structure as the source environment. You will be prompted to confirm each user assignment found in the target environment, giving you full control over the migration process. Team administrator roles are also maintained.

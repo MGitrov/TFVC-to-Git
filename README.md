@@ -6,7 +6,7 @@
   - [Branches and Changesets Migration](#three-branches-and-changesets-migration)
   - [Pipelines Migration](#four-pipelines-migration)
   - [Test Artifacts (Shared Parameters, Shared Steps, Test Plans, Test Suites and Test Cases) Migration](#five-test-artifacts-shared-parameters-shared-steps-test-plans-test-suites-and-test-cases-migration)
-  - [Shared Queries Migration](#six-shared-queries-migration)
+  - [Shared Queries Migration](#six-shared-queries-migration-must-be-migrated-prior-to-dashboards)
   - [Dashboards Migration](#seven-dashboards-migration)
   - [Assign Users To Teams](#six-assign-users-to-teams)
 

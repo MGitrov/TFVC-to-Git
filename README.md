@@ -5,7 +5,7 @@
   - [Work Items (Boards, Backlogs, and Sprints), Iterations and Areas, and Teams Migration](#two-work-items-boards-backlogs-and-sprints-iterations-and-areas-and-teams-migration)
   - [Branches and Changesets Migration](#three-branches-and-changesets-migration)
   - [Pipelines Migration](#four-pipelines-migration)
-  - [Test Artifacts (Shared Parameters, Shared Steps, Test Plans, Test Suites and Test Cases) Migration](#five-test-artifacts-shared%parameters-backlogs-and-sprints-iterations-and-areas-and-teams-migration)
+  - [Test Artifacts (Shared Parameters, Shared Steps, Test Plans, Test Suites and Test Cases) Migration](#five-test-artifacts-shared-parameters-shared-steps-test-plans-test-suites-and-test-cases-migration)
   - [Shared Queries Migration](#four-shared-queries-migration)
   - [Dashboards Migration](#five-dashboards-migration)
   - [Assign Users To Teams](#six-assign-users-to-teams)

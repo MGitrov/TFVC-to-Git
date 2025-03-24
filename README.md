@@ -59,9 +59,10 @@ witadmin exportprocessconfig /collection:<collection_url> /p:<project_name> /f:"
 * ```"DirectoryPath\ProcessConfiguration.xml"``` will export the XML file to your current working directory, can be modified as well.
 
 ### :two: Work Items (Boards, Backlogs, and Sprints), Iterations and Areas, and Teams Migration
-:purple_circle: Will be migrated using Azure DevOps Migration Tools.
 
-:hourglass_flowing_sand: A migration of 2,400~ work items took nearly two hours.
+![usedToolBadge](https://img.shields.io/badge/Tool-Azure%20DevOps%20Migration%20Tools-blue?style=for-the-badge)
+
+:hourglass_flowing_sand: A migration of 2,400~ work items took two hours.
 
 **Reverse Proxy:**
 
@@ -73,11 +74,11 @@ Hence, to use an HTTPS connection to your Azure DevOps Server, you can either in
 
 ![image](https://github.com/user-attachments/assets/dc86ffe0-237f-4ad6-858f-6ee22c035fe4)
 
-We can use Caddy as a reverse proxy to switch the Azure DevOps Server from HTTP to HTTPS. Caddy automatically provisions SSL/TLS certificates for the provided domain using Let’s Encrypt.
+Caddy can be used as a reverse proxy to switch the Azure DevOps Server from HTTP to HTTPS. Caddy automatically provisions SSL/TLS certificates for the provided domain using Let’s Encrypt.
 
 :link: [**READ CADDY'S DOCUMENTATION**](https://caddyserver.com/docs/)
 
-If you have used the ```Caddyfile``` provided in the repository, the collection URL you will use in the JSON files is ```https://localhost:9000/tfs/YourCollectionName```.
+**If you have used the ```Caddyfile``` provided in the repository, the collection URL you will use in your JSON files is ```https://localhost:9000/tfs/<your_collection_name>```**.
 
 From where the ```Caddyfile``` is located run the following command:
 ``` bash

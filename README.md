@@ -106,44 +106,50 @@ devopsmigration execute --config .\work-items.json
 :warning: You may need to modify the ```work-items.json``` file to fit your specific needs - :link: [**DOCUMENTATION**](https://nkdagility.com/learn/azure-devops-migration-tools/).
 
 ### :three: Branches and Changesets Migration
-:purple_circle: Will be migrated using git-tfs.
+![usedToolBadge](https://img.shields.io/badge/Tool-git%20tfs-blue?style=for-the-badge)
 
-**1.1.** Start by cloning the **TFVC-based** repository to your local machine using the following commands:
+**3.1.** Start by cloning the TFVC-based repository to your local machine using the following commands:
+
+(Optional but recommended) List all available TFVC branches using the following command:
+  ``` bash
+  git tfs list-remote-branches http://tfs-server:8080/tfs/<your_collection_name>
+  ```
+  * Replace ```http://tfs-server:8080/tfs/<your_collection_name>``` with your Azure DevOps' Server collection URL.
 
 Depending on the branches that has to be migrated, we will set the ```branches``` flag in the command.
 
 * Cloning a TFVC-based repository from Azure DevOps Server (on-premises):
 
-  **1.1.1** Clone all branches and their related history using the following command:
+  **3.1.1** Clone all branches and their related history using the following command:
   ``` bash
-  git tfs clone --branches=all http://tfs-server:8080/tfs/Collection $/Project/Main
+  git tfs clone --branches=all http://tfs-server:8080/tfs/<your_collection_name> $/Project/Main
   ```
-  * Replace ```http://tfs-server:8080/tfs/Collection``` with your Azure DevOps' Server collection URL.
+  * Replace ```http://tfs-server:8080/tfs/<your_collection_name>``` with your Azure DevOps' Server collection URL.
   * Replace ```$/Project/Main``` with a path to one of your repository's branch. Basically, it will alow ```git-tfs``` to detect related branches, and make every branch in the TFVC repository a branch in the Git repository.
   * Using the ```--branches=all``` flag will cause ```git-tfs``` to clone the entire repository with all the branches and their related history (less recommended for complex branch scenarios).
   * After the clone completion, a new Git directory (new Git repository) will be created named by the cloned branch.
 
-  **1.1.2** Clone a specified branch with its full history using the following command:
+  **3.1.2** Clone a specified branch with its full history using the following command:
   ``` bash
-  git tfs clone --branches=none http://tfs-server:8080/tfs/Collection $/Project/Main
+  git tfs clone --branches=none http://tfs-server:8080/tfs/<your_collection_name> $/Project/Main
   ```
-  * Replace ```http://tfs-server:8080/tfs/Collection``` with your Azure DevOps' Server collection URL.
+  * Replace ```http://tfs-server:8080/tfs/<your_collection_name>``` with your Azure DevOps' Server collection URL.
   * Replace ```$/Project/Main``` with a path to one of your repository's branch. Basically, it will alow ```git-tfs``` to detect related branches, and make every branch in the TFVC repository a branch in the Git repository.
   * Using the ```--branches=none``` flag will cause ```git-tfs``` to clone only the ```$/Project/Main``` branch with its full history, whereas other branches and their relationships (parent/child/merge metadata) are not initialized or fetched automatically.
   * In Git, branches are natvely independent so this type of clone is more recommended and has a better chance to succeed.
   * There might be cases that the whole history for the ```$/Project/Main``` branch will not be fetched initially. In such case you can run the ```git tfs fetch --all``` command to force ```git-tfs``` to recheck all the changesets for the branch and ensures no changes are missed.
   * After the clone completion, a Git new directory (new Git repository) will be created named by the cloned branch.
   
-    **1.1.2.1** Initialize and fetch additional branches with their full history using the following command:
+    **3.1.2.1** Initialize and fetch additional branches with their full history using the following command:
  
-    :warning: By default, ```git-tfs``` tries to maintain the hierarchical relationships between TFS branches. If the current branch you want to init and fetch was created as a child of some other branch, ```git-tfs``` considers the parent branch necessary to preserve the branch structure. **But**, pay attention to it as a manual intervention might be needed.
+    :warning: By default, ```git-tfs``` tries to maintain the hierarchical relationships between TFVC branches. If the current branch you want to init and fetch was created as a child of some other branch, ```git-tfs``` considers the parent branch necessary to preserve the branch structure. **But**, pay attention to it as a manual intervention might be needed.
     ``` bash
     git tfs branch --init $/Project/Main
     ```
     * Replace ```$/Project/Main``` with a path to one of your repository's branch.
     * Repeat this command for every branch you need to be at the same Git repository.
 
-  **1.1.3** (Optional) Verify that the cloning went well using the ```git tfs verify --all``` command.
+  **3.1.3** (Optional) Verify that the cloning went well using the ```git tfs verify --all``` command.
 
 * Cloning a TFVC-based repository from Azure DevOps Services (cloud environment):
   1. Navigate from within the command prompt or terminal to the directory where you want to create the local repository.
@@ -154,8 +160,8 @@ Depending on the branches that has to be migrated, we will set the ```branches``
   * Replace ```{organization}``` with your Azure DevOps organization name.
   * Replace ```$/Project/PathToTFVC``` with the TFVC repository path.
   * Replace ```{PAT}``` with your personal access token generated for your user in Azure DevOps.
- 
-**1.2.** Verify the local Git repository using the following commands:
+------------------------------
+**3.2.** Verify the local Git repository using the following commands:
 * Navigate to the cloned directory:
  ``` bash
   cd PathToLocalGitRepo
@@ -168,13 +174,13 @@ Depending on the branches that has to be migrated, we will set the ```branches``
  ``` bash
   git log
   ```
-**1.3.** Add the Azure DevOps Git repository as a remote using the following command:
+**3.3.** Add the Azure DevOps Git repository as a remote using the following command:
  ``` bash
-git remote add origin https://dev.azure.com/YourOrganizationName/YourProjectName/_git/YourRepositoryName
+git remote add origin https://dev.azure.com/<your_organization_name>/<your_project_name>/_git/<your_repository_name>
   ```
   * The URL also can be taken from the project's web portal in Azure DevOps.
 
-**1.4.** Push the migrated history to Azure DevOps Git Repository using the following command:
+**3.4.** Push the migrated history to Azure DevOps Git Repository using the following command:
  ``` bash
   git push --all origin
   ```

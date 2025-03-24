@@ -13,7 +13,7 @@
 
 
 # Introduction
-A migration guide from a TFVC-based project to a Git-based project.
+A migration guide for migrating projects between Azure DevOps environments.
 
 # Prerequisites
 ### **:one: [git-tfs](https://github.com/git-tfs/git-tfs) (and its related prerequisites)**

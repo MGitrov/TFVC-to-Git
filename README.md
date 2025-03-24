@@ -191,6 +191,10 @@ git remote add origin https://dev.azure.com/<your_organization_name>/<your_proje
 ### :four: Pipelines Migration
 ![usedToolBadge](https://img.shields.io/badge/Tool-CodeWizard%20Script-blue?style=for-the-badge)
 
+:warning: **Prior to the execution of the ```tfvc_to_git_classic_pipelines.py``` or ```tfvc_to_tfvc_classic_pipelines.py``` script, make sure all the relevant service connections (per project) are reconfigured in the target organization.**
+
+:warning: **Prior to the execution of the ```tfvc_to_git_classic_pipelines.py``` or ```tfvc_to_tfvc_classic_pipelines.py``` script, make sure all the relevant secret files configured in the variable groups (per project) are reconfigured in the target organization.**
+
 A Pipeline in Azure DevOps is a workflow automation tool that allows you to build, test, and deploy your code automatically.
 
 **Types of Pipelines:**
@@ -235,7 +239,7 @@ The ```tfvc_to_git_pipelines_variable_groups.py``` script handles the migration 
   
   ![usedToolBadge](https://img.shields.io/badge/Tool-tfvc__to__tfvc__classic__pipelines.py-blue?style=social)
 
-  The ```tfvc_to_git_classic_pipelines.py``` script migrates classic build pipelines between TFVC repositories while maintaining the TFVC structure.
+  The ```tfvc_to_tfvc_classic_pipelines.py``` script migrates classic build pipelines between TFVC repositories while maintaining the TFVC structure.
 
   **4.1.2. YAML Build Pipelines:**
   
@@ -270,11 +274,15 @@ devopsmigration execute --config .\shared-queries.json
 :warning: You may need to modify the ```shared-queries.json``` file to fit your specific needs - :link: [**DOCUMENTATION**](https://nkdagility.com/learn/azure-devops-migration-tools/).
 
 ### :seven: Dashboards Migration
-:purple_circle: Will be migrated using CodeWizard's script.
+![usedToolBadge](https://img.shields.io/badge/Tool-tfvc__to__git__dashboards.py-blue?style=social)
+
+:warning: **Prior to the execution of the ```tfvc_to_git_dashboards.py``` script, make sure all the relevant third party extensions (including widgets) are reinstalled in the target organization.**
 
 Dashboards are customizable, interactive panels that provide teams with a consolidated view of important project metrics, progress, and tools. Dashboards are associated with specific teams and can be tailored to display relevant widgets like sprint burndown charts, work item queries, team member details, and build pipeline summaries. They serve as a central hub for monitoring project health, team performance, and delivery timelines.
 
-### :six: Assign Users To Teams
-:purple_circle: Will be implemented using CodeWizard's script.
+### :eight: Assign Users To Teams
+![usedToolBadge](https://img.shields.io/badge/Tool-tfvc__to__git__user__to__team.py-blue?style=social)
+
+:warning: **Prior to the execution of the ```tfvc_to_git_user_to_team.py.py``` script, make sure all the relevant users exist in the target organization.**
 
  

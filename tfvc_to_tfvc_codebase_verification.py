@@ -2,11 +2,11 @@ import os
 import shutil
 import base64
 import requests
-import json
+import hashlib
 from dotenv import load_dotenv
-import subprocess
+import tqdm
 import csv
-import time
+import random
 import pyfiglet
 
 load_dotenv()
@@ -237,9 +237,88 @@ def compare_structure(source_organization, source_project_name, source_header, s
         "matching_count": len(source_paths.intersection(target_paths))
     }
 
+def sample_content(source_organization, source_project_name, source_header, source_tfvc_path, target_organization, target_project_name, 
+                     target_header, target_tfvc_path, results_folder, sample_size=50):
+    """
+    The function compares the actual content of files of a source and target TFVC repositories. 
+    
+    Rather than comparing every single file (which could be very time-consuming for large repositories), 
+    the function uses statistical sampling to check a representative subset of files.
+    """
+    print(f"[INFO] Sampling content of {sample_size} files...")
+    
+    source_tfvc_items = get_items(source_organization, source_project_name, source_tfvc_path, source_header)
+
+    if not source_tfvc_items:
+        return {"success": False, "error": "Failed to retrieve source items"}
+    
+    # Filters for files only (not folders).
+    files = [item for item in source_tfvc_items.get('value', []) if item.get('isFolder') is False]
+    
+    # Takes a sample of files.
+    sample_size = min(sample_size, len(files))
+    files_sample = random.sample(files, sample_size) if len(files) > sample_size else files
+    
+    results = []
+    
+    for file in tqdm.tqdm(files_sample, desc="Comparing files"):
+        source_file_path = file['path']
+        target_file_path = source_file_path.replace(source_tfvc_path, target_tfvc_path)
+        
+        source_file_content = get_item_content(source_organization, source_project_name, source_file_path, source_header)
+        target_file_content = get_item_content(target_organization, target_project_name, target_file_path, target_header)
+        
+        if source_file_content is None or target_file_content is None:
+            results.append({
+                "path": source_file_path,
+                "match": False,
+                "error": "Failed to retrieve content"
+            })
+            continue
+        
+        """
+        Uses SHA-256 hash to compare the content of the files.
+
+        • The same file will always produce the same hash.
+        • Different files will almost always produce different hashes.
+        • Even a small change in the file will produce a completely different hash.
+        """
+        source_file_hash = hashlib.sha256(source_file_content).hexdigest()
+        target_file_hash = hashlib.sha256(target_file_content).hexdigest()
+        
+        results.append({
+            "path": source_file_path,
+            "match": source_file_hash == target_file_hash,
+            "source_hash": source_file_hash,
+            "target_hash": target_file_hash
+        })
+    
+    # Write results to CSV
+    with open(f"{results_folder}/content_comparison.csv", "w", newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(["Path", "Match", "Source Hash", "Target Hash"])
+        
+        for result in results:
+            writer.writerow([
+                result["path"], 
+                result["match"], 
+                result.get("source_hash", "N/A"), 
+                result.get("target_hash", "N/A")
+            ])
+    
+    match_count = sum(1 for result in results if result["match"])
+    
+    return {
+        "success": True,
+        "sample_size": len(results),
+        "match_count": match_count,
+        "match_percentage": (match_count / len(results)) * 100 if results else 0
+    }
+
 if __name__ == "__main__":
     #get_items(SOURCE_ORGANIZATION, SOURCE_PROJECT,"$/TFS-based test project", SOURCE_AUTHENTICATION_HEADER)
     #get_item_content(SOURCE_ORGANIZATION, SOURCE_PROJECT,"$/TFS-based test project/branchWithin/tulip/tlp.md", SOURCE_AUTHENTICATION_HEADER)
     #get_labels(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER)
     #get_changesets(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER)
-    compare_structure(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, "$/TFS-based test project", TARGET_ORGANIZATION, TARGET_PROJECT, TARGET_AUTHENTICATION_HEADER, "$/Magnolia", "/Users/pyruc/Desktop/TFVC-to-Git")
+    #compare_structure(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, "$/TFS-based test project", TARGET_ORGANIZATION, TARGET_PROJECT, TARGET_AUTHENTICATION_HEADER, "$/Magnolia", "/Users/pyruc/Desktop/TFVC-to-Git")
+    sample_content(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, "$/TFS-based test project", TARGET_ORGANIZATION, TARGET_PROJECT, TARGET_AUTHENTICATION_HEADER, "$/Magnolia", "/Users/pyruc/Desktop/TFVC-to-Git", 300)

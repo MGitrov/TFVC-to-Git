@@ -201,10 +201,6 @@ git remote add origin https://dev.azure.com/<your_organization_name>/<your_proje
 ### :five: Pipelines Migration
 ![usedToolBadge](https://img.shields.io/badge/Tool-CodeWizard%20Script-blue?style=for-the-badge&labelColor=orange)
 
-:warning: **Prior to the execution of the ```tfvc_to_git_classic_pipelines.py``` or ```tfvc_to_tfvc_classic_pipelines.py``` script, make sure all the relevant service connections (per project) are reconfigured in the target organization.**
-
-:warning: **Prior to the execution of the ```tfvc_to_git_classic_pipelines.py``` or ```tfvc_to_tfvc_classic_pipelines.py``` script, make sure all the relevant secret files configured in the variable groups (per project) are reconfigured in the target organization.**
-
 A Pipeline in Azure DevOps is a workflow automation tool that allows you to build, test, and deploy your code automatically.
 
 **Types of Pipelines:**
@@ -238,6 +234,10 @@ The ```tfvc_to_git_pipelines_variable_groups.py``` script handles the migration 
 **5.1. Build Pipelines:**
 
   **5.1.1. Classic Build Pipelines:**
+  
+  :warning: **Prior to the execution of the ```tfvc_to_git_classic_pipelines.py``` or ```tfvc_to_tfvc_classic_pipelines.py``` script, make sure all the relevant service connections (per project) are reconfigured in the target organization.**
+  
+  :warning: **Prior to the execution of the ```tfvc_to_git_classic_pipelines.py``` or ```tfvc_to_tfvc_classic_pipelines.py``` script, make sure all the relevant secret files configured in the variable groups (per project) are reconfigured in the target organization.**
 
   **5.1.1.1. TFVC-based -> Git-based:**
   

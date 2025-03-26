@@ -211,7 +211,7 @@ def compare_structure(source_organization, source_project_name, source_header, s
             writer.writerow(["INFO", f"'{source_tfvc_path}' and '{target_tfvc_path}' are identical", f"All {source_counter} items match"])
 
         else:
-            # Write missing items.
+            # Writes missing items.
             for path in missing_items:
                 writer.writerow([
                     "MISSING FROM TARGET", 
@@ -219,7 +219,7 @@ def compare_structure(source_organization, source_project_name, source_header, s
                     source_dictionary[path].get('size', 'N/A')
                 ])
             
-            # Write extra items.
+            # Writes extra items.
             for path in extra_items:
                 # Formats back the target path to its original form.
                 actual_target_path = path.replace(source_tfvc_path, target_tfvc_path)
@@ -402,7 +402,7 @@ def compare_changesets(source_organization, source_project_name, source_header,
     
     matched_ids = []  # Stores source changeset numbers that were found in the target.
     migrated_changesets = []  # Stores target changeset numbers that reference source changesets.
-    match_details = [] # Stores detailed information about each match for later analysis.
+    match_details = [] # Stores detailed information about each match.
 
     for target_changeset in target_cs:
         target_changeset_comment = target_changeset.get('comment', '')
@@ -422,11 +422,11 @@ def compare_changesets(source_organization, source_project_name, source_header,
         if pattern1:
             extracted_id = pattern1.group(1)
             extracted_comment = pattern1.group(2)
-            match_type = "full"
+            match_type = "full" # A 'full' match occurs when both the source changeset ID and comment are found in the target changeset comment.
 
         elif pattern2:
             extracted_id = pattern2.group(1)
-            match_type = "id_only"
+            match_type = "id_only" # An 'id_only' match occurs when only the source changeset ID is found in the target changeset comment.
         
         if extracted_id:
             migrated_changesets.append(target_changeset_id)
@@ -457,46 +457,12 @@ def compare_changesets(source_organization, source_project_name, source_header,
     # Counts unique source changesets that were matched.
     unique_matched_ids = set(matched_ids)
     
-    # Write detailed changeset comparison to CSV
+    # Outputs the results to a CSV file.
     with open(f"{results_folder}/changeset_comparison.csv", "w", newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow(["Repository", "Changeset ID", "Author", "Date", "Comment", "Extracted Original Comment"])
-        
-        # Write source changesets
-        for cs in source_cs:
-            writer.writerow([
-                "Source",
-                cs.get('changesetId', 'N/A'),
-                cs.get('author', {}).get('displayName', 'N/A'),
-                cs.get('createdDate', 'N/A'),
-                cs.get('comment', 'N/A'),
-                "N/A"  # No extraction needed for source
-            ])
-        
-        # Write target changesets
-        for cs in target_cs:
-            target_comment = cs.get('comment', 'N/A')
-            extracted = "N/A"
-            
-            # Try to extract the original comment using pattern1
-            match = re.match(r"Migrated from changeset no\. (\d+): (.*)", target_comment)
-            if match:
-                extracted = match.group(2)
-            
-            writer.writerow([
-                "Target",
-                cs.get('changesetId', 'N/A'),
-                cs.get('author', {}).get('displayName', 'N/A'),
-                cs.get('createdDate', 'N/A'),
-                target_comment,
-                extracted
-            ])
-    
-    # Write more detailed matching report to help debugging
-    with open(f"{results_folder}/changeset_matches.csv", "w", newline='') as f:
         writer = csv.writer(f)
         writer.writerow(["Source ID", "Target ID", "Match Type", "Source Comment", "Target Comment", "Extracted Comment", "Comment Match"])
         
+        # Writes all matches found.
         for match in match_details:
             writer.writerow([
                 match["source_id"],
@@ -507,25 +473,37 @@ def compare_changesets(source_organization, source_project_name, source_header,
                 match["extracted_comment"],
                 match["comment_match"]
             ])
+        
+        # Writes any source changesets that were not matched.
+        for source_id, source_data in source_changesets_dictionary.items():
+            if source_id not in matched_ids:
+                writer.writerow([
+                    source_id,
+                    "NOT FOUND",
+                    "no_match",
+                    source_data["comment"],
+                    "N/A",
+                    "N/A",
+                    "False"
+                ])
     
-    # Calculate match percentages
-    id_match_percentage = (len(unique_matched_ids) / source_count) * 100 if source_count > 0 else 0
+    # Calculates match percentages.
+    id_match_percentage = (len(unique_matched_ids) / source_changesets_count) * 100 if source_changesets_count > 0 else 0
     
     # Count full matches (ID + comment match)
     full_matches = sum(1 for match in match_details if match["comment_match"])
-    full_match_percentage = (full_matches / source_count) * 100 if source_count > 0 else 0
+    full_match_percentage = (full_matches / source_changesets_count) * 100 if source_changesets_count > 0 else 0
     
     return {
         "success": True,
-        "source_count": source_count,
-        "target_count": target_count,
+        "source_count": source_changesets_count,
+        "target_count": target_changesets_count,
         "matched_source_ids": len(unique_matched_ids),
-        "migrated_target_changesets": len(migrated_cs),
+        "migrated_target_changesets": len(migrated_changesets),
         "full_matches": full_matches,
         "id_match_percentage": id_match_percentage,
         "full_match_percentage": full_match_percentage,
-        # Add a list of unmatched source IDs for reporting
-        "unmatched_source_ids": [id for id in source_cs_dict.keys() if id not in unique_matched_ids]
+        "unmatched_source_ids": [id for id in source_changesets_dictionary.keys() if id not in unique_matched_ids]
     }
 
 if __name__ == "__main__":

@@ -534,9 +534,9 @@ def compare_labels(source_organization, source_project_name, source_header, # RE
                    target_organization, target_project_name, target_headers, 
                    results_folder):
     """
-    Compare labels between source and target repositories.
+    This function compares labels between a source and target TFVC repositories.
     """
-    print("Comparing repository labels...")
+    print(f"[INFO] Comparing repository labels...")
     
     source_labels = get_labels(source_organization, source_project_name, source_header)
     target_labels = get_labels(target_organization, target_project_name, target_headers)
@@ -544,13 +544,13 @@ def compare_labels(source_organization, source_project_name, source_header, # RE
     if not source_labels or not target_labels:
         return {"success": False, "error": "Failed to retrieve labels"}
     
-    # Create dictionaries by label name
-    source_dict = {label['name']: label for label in source_labels.get('value', [])}
-    target_dict = {label['name']: label for label in target_labels.get('value', [])}
+    # Creates a lookup dictionaries of source and target labels by label name.
+    source_labels_dictionary = {label['name']: label for label in source_labels.get('value', [])}
+    target_labels_dictionary = {label['name']: label for label in target_labels.get('value', [])}
     
-    # Compare counts
-    source_count = len(source_dict)
-    target_count = len(target_dict)
+    # Counts how many labels were found in each repository.
+    source_labels_count = len(source_labels_dictionary)
+    target_labels_count = len(target_labels_dictionary)
     
     # Find missing and extra labels
     source_names = set(source_dict.keys())

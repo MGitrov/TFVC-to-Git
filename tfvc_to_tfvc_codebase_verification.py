@@ -1,11 +1,12 @@
 import os
-import shutil
+import json
 import base64
 import requests
 import hashlib
 from dotenv import load_dotenv
 import tqdm
 import csv
+import re
 import random
 import pyfiglet
 
@@ -54,7 +55,7 @@ def get_items(organization, project_name, tfvc_path, authentication_header, recu
     
     try:
         response = requests.get(url, headers=headers, params=params)
-        print(f"[DEBUG] Request's Status Code: {response.status_code}")
+        #print(f"[DEBUG] Request's Status Code: {response.status_code}")
 
         if response.status_code == 200:
             return response.json()
@@ -87,7 +88,7 @@ def get_item_content(organization, project_name, tfvc_path, authentication_heade
     
     try:
         response = requests.get(url, headers=headers, params=params)
-        print(f"[DEBUG] Request's Status Code: {response.status_code}")
+        #print(f"[DEBUG] Request's Status Code: {response.status_code}")
         
         if response.status_code == 200:
             return response.content
@@ -119,7 +120,7 @@ def get_labels(organization, project_name, authentication_header):
     
     try:
         response = requests.get(url, headers=headers, params=params)
-        print(f"[DEBUG] Request's Status Code: {response.status_code}")
+        #print(f"[DEBUG] Request's Status Code: {response.status_code}")
         
         if response.status_code == 200:
             #print(f"\n{response.json()}\n")
@@ -153,7 +154,7 @@ def get_changesets(organization, project_name, authentication_header, top=100):
     
     try:
         response = requests.get(url, headers=headers, params=params)
-        print(f"[DEBUG] Request's Status Code: {response.status_code}")
+        #print(f"[DEBUG] Request's Status Code: {response.status_code}")
         
         if response.status_code == 200:
             return response.json()
@@ -237,8 +238,9 @@ def compare_structure(source_organization, source_project_name, source_header, s
         "matching_count": len(source_paths.intersection(target_paths))
     }
 
-def sample_content(source_organization, source_project_name, source_header, source_tfvc_path, target_organization, target_project_name, 
-                     target_header, target_tfvc_path, results_folder, sample_size=50):
+def sample_content(source_organization, source_project_name, source_header, source_tfvc_path, 
+                  target_organization, target_project_name, target_header, target_tfvc_path, 
+                  results_folder, sample_size=50):
     """
     The function compares the actual content of files of a source and target TFVC repositories. 
     
@@ -252,59 +254,113 @@ def sample_content(source_organization, source_project_name, source_header, sour
     if not source_tfvc_items:
         return {"success": False, "error": "Failed to retrieve source items"}
     
-    # Filters for files only (not folders).
-    files = [item for item in source_tfvc_items.get('value', []) if item.get('isFolder') is False]
+    total_items = len(source_tfvc_items.get('value', []))
+    print(f"[DEBUG] Total TFVC items fetched from source: {total_items}")
     
-    # Takes a sample of files.
+    # Filters for files only (not folders).
+    files = [item for item in source_tfvc_items.get('value', []) if 'path' in item and '.' in item['path'].split('/')[-1]]
+
+    print(f"[DEBUG] Files identified: {len(files)}")
+
+    # If files are not found, the function tries to understand the structure.
+    if not files:
+        print("\n\033[1;38;5;214m[WARNING] No files found; Examining response structure...\033[0m")
+        
+        if source_tfvc_items.get('value') and len(source_tfvc_items.get('value')) > 0:
+            first_item = source_tfvc_items.get('value')[0]
+            print(f"[DEBUG] First item properties: {list(first_item.keys())}")
+            print(f"[DEBUG] First item sample: {json.dumps(first_item, indent=2)[:500]}\n")
+        
+        return {"success": False, "error": "No files found in source path"}
+    
     sample_size = min(sample_size, len(files))
     files_sample = random.sample(files, sample_size) if len(files) > sample_size else files
     
+    print(f"[DEBUG] Files to compare: {len(files_sample)}")
+    
     results = []
+    error_count = 0
     
     for file in tqdm.tqdm(files_sample, desc="Comparing files"):
-        source_file_path = file['path']
-        target_file_path = source_file_path.replace(source_tfvc_path, target_tfvc_path)
-        
-        source_file_content = get_item_content(source_organization, source_project_name, source_file_path, source_header)
-        target_file_content = get_item_content(target_organization, target_project_name, target_file_path, target_header)
-        
-        if source_file_content is None or target_file_content is None:
+        try:
+            source_file_path = file['path']
+            target_file_path = source_file_path.replace(source_tfvc_path, target_tfvc_path)
+            print("\n")
+            print(f"[DEBUG] Comparing: '{source_file_path}' → '{target_file_path}'")
+            
+            source_file_content = get_item_content(source_organization, source_project_name, source_file_path, source_header)
+
+            if source_file_content is None:
+                error_count += 1
+                results.append({
+                    "path": source_file_path,
+                    "match": False,
+                    "error": "Failed to retrieve source content"
+                })
+                continue
+                
+            target_file_content = get_item_content(target_organization, target_project_name, target_file_path, target_header)
+
+            if target_file_content is None:
+                error_count += 1
+                results.append({
+                    "path": source_file_path,
+                    "match": False,
+                    "error": "Failed to retrieve target content"
+                })
+                continue
+            
+            """
+            Uses SHA-256 hash to compare the content of the files.
+            
+            • The same file will always produce the same hash.
+            • Different files will almost always produce different hashes.
+            • Even a small change in the file will produce a completely different hash.
+            """
+            source_file_hash = hashlib.sha256(source_file_content).hexdigest()
+            target_file_hash = hashlib.sha256(target_file_content).hexdigest()
+            
+            match = source_file_hash == target_file_hash
+            
             results.append({
                 "path": source_file_path,
-                "match": False,
-                "error": "Failed to retrieve content"
+                "match": match,
+                "source_hash": source_file_hash,
+                "target_hash": target_file_hash
             })
-            continue
-        
-        """
-        Uses SHA-256 hash to compare the content of the files.
 
-        • The same file will always produce the same hash.
-        • Different files will almost always produce different hashes.
-        • Even a small change in the file will produce a completely different hash.
-        """
-        source_file_hash = hashlib.sha256(source_file_content).hexdigest()
-        target_file_hash = hashlib.sha256(target_file_content).hexdigest()
-        
-        results.append({
-            "path": source_file_path,
-            "match": source_file_hash == target_file_hash,
-            "source_hash": source_file_hash,
-            "target_hash": target_file_hash
-        })
+        except Exception as e:
+            print(f"\033[1;31m[ERROR] An error occurred while comparing file '{file.get('path', 'unknown')}': {e}\033[0m")
+            error_count += 1
+            results.append({
+                "path": file.get('path', 'unknown'),
+                "match": False,
+                "error": str(e)
+            })
     
-    # Write results to CSV
-    with open(f"{results_folder}/content_comparison.csv", "w", newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow(["Path", "Match", "Source Hash", "Target Hash"])
-        
-        for result in results:
-            writer.writerow([
-                result["path"], 
-                result["match"], 
-                result.get("source_hash", "N/A"), 
-                result.get("target_hash", "N/A")
-            ])
+    print(f"\n[INFO] Comparison complete:")
+    print(f"• Files compared: {len(results)}")
+    print(f"• Errors encountered: {error_count}")
+    
+    # Outputs the results to a CSV file.
+    try:
+        with open(f"{results_folder}/content_comparison.csv", "w", newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(["Path", "Match", "Source Hash", "Target Hash", "Error"])
+            
+            for result in results:
+                writer.writerow([
+                    result["path"], 
+                    result["match"], 
+                    result.get("source_hash", "N/A"), 
+                    result.get("target_hash", "N/A"),
+                    result.get("error", "")
+                ])
+
+        print(f"\n[INFO] Results written to '{results_folder}/content_comparison.csv'.")
+
+    except Exception as e:
+        print(f"\n\033[1;31m[ERROR] An error occurred while writing to '{results_folder}/content_comparison.csv': {e}\033[0m")
     
     match_count = sum(1 for result in results if result["match"])
     
@@ -312,13 +368,173 @@ def sample_content(source_organization, source_project_name, source_header, sour
         "success": True,
         "sample_size": len(results),
         "match_count": match_count,
-        "match_percentage": (match_count / len(results)) * 100 if results else 0
+        "match_percentage": (match_count / len(results)) * 100 if results else 0,
+        "error_count": error_count
+    }
+
+def compare_changesets(source_organization, source_project_name, source_header, 
+                  target_organization, target_project_name, target_header, 
+                  results_folder, sample_size=50):
+    """
+    This function compares recent changesets between a source and target TFVC repositories.
+    """
+    print(f"[INFO] Comparing recent {sample_size} changesets...")
+    
+    source_changesets = get_changesets(source_organization, source_project_name, source_header, sample_size)
+    target_changesets = get_changesets(target_organization, target_project_name, target_header, sample_size)
+    
+    if not source_changesets or not target_changesets:
+        return {"success": False, "error": "Failed to retrieve changesets"}
+    
+    source_cs = source_changesets.get('value', [])
+    target_cs = target_changesets.get('value', [])
+    
+    # Counts how many changesets were found in each repository.
+    source_changesets_count = len(source_cs)
+    target_changesets_count = len(target_cs)
+    
+    # Creates a lookup dictionary of source changesets by ID and comment.
+    source_changesets_dictionary = {str(cs.get('changesetId')): {
+        'comment': cs.get('comment', ''),
+        'author': cs.get('author', {}).get('displayName', ''),
+        'date': cs.get('createdDate', '')
+    } for cs in source_cs}
+    
+    matched_ids = []  # Stores source changeset numbers that were found in the target.
+    migrated_changesets = []  # Stores target changeset numbers that reference source changesets.
+    match_details = [] # Stores detailed information about each match for later analysis.
+
+    for target_changeset in target_cs:
+        target_changeset_comment = target_changeset.get('comment', '')
+        target_changeset_id = target_changeset.get('changesetId', 'N/A')
+        
+        # Tries different regex patterns.
+        # Pattern 1: "Migrated from changeset no. {changeset_id}: {original_comment}"
+        pattern1 = re.match(r"Migrated from changeset no\. (\d+): (.*)", target_changeset_comment)
+
+        # Pattern 2: "Migrated changeset no. {changeset_id} - recreated the 'branch' branch"
+        pattern2 = re.match(r"Migrated changeset no\. (\d+).*", target_changeset_comment)
+        
+        extracted_id = None
+        extracted_comment = None
+        match_type = None
+        
+        if pattern1:
+            extracted_id = pattern1.group(1)
+            extracted_comment = pattern1.group(2)
+            match_type = "full"
+
+        elif pattern2:
+            extracted_id = pattern2.group(1)
+            match_type = "id_only"
+        
+        if extracted_id:
+            migrated_changesets.append(target_changeset_id)
+            
+            # Checks whether this ID is among the source changesets.
+            if extracted_id in source_changesets_dictionary:
+                matched_ids.append(extracted_id)
+                
+                # Prepare match details for CSV
+                source_comment = source_changesets_dictionary[extracted_id]['comment']
+                comment_match = False
+                
+                if match_type == "full" and extracted_comment:
+                    # Checks whether the extracted comment is contained in the source comment (allowing for truncation).
+                    if source_comment.startswith(extracted_comment) or extracted_comment in source_comment:
+                        comment_match = True
+                
+                match_details.append({
+                    "source_id": extracted_id,
+                    "target_id": target_changeset_id,
+                    "match_type": match_type,
+                    "source_comment": source_comment,
+                    "target_comment": target_changeset_comment,
+                    "extracted_comment": extracted_comment if extracted_comment else "N/A",
+                    "comment_match": comment_match
+                })
+    
+    # Counts unique source changesets that were matched.
+    unique_matched_ids = set(matched_ids)
+    
+    # Write detailed changeset comparison to CSV
+    with open(f"{results_folder}/changeset_comparison.csv", "w", newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(["Repository", "Changeset ID", "Author", "Date", "Comment", "Extracted Original Comment"])
+        
+        # Write source changesets
+        for cs in source_cs:
+            writer.writerow([
+                "Source",
+                cs.get('changesetId', 'N/A'),
+                cs.get('author', {}).get('displayName', 'N/A'),
+                cs.get('createdDate', 'N/A'),
+                cs.get('comment', 'N/A'),
+                "N/A"  # No extraction needed for source
+            ])
+        
+        # Write target changesets
+        for cs in target_cs:
+            target_comment = cs.get('comment', 'N/A')
+            extracted = "N/A"
+            
+            # Try to extract the original comment using pattern1
+            match = re.match(r"Migrated from changeset no\. (\d+): (.*)", target_comment)
+            if match:
+                extracted = match.group(2)
+            
+            writer.writerow([
+                "Target",
+                cs.get('changesetId', 'N/A'),
+                cs.get('author', {}).get('displayName', 'N/A'),
+                cs.get('createdDate', 'N/A'),
+                target_comment,
+                extracted
+            ])
+    
+    # Write more detailed matching report to help debugging
+    with open(f"{results_folder}/changeset_matches.csv", "w", newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(["Source ID", "Target ID", "Match Type", "Source Comment", "Target Comment", "Extracted Comment", "Comment Match"])
+        
+        for match in match_details:
+            writer.writerow([
+                match["source_id"],
+                match["target_id"],
+                match["match_type"],
+                match["source_comment"],
+                match["target_comment"],
+                match["extracted_comment"],
+                match["comment_match"]
+            ])
+    
+    # Calculate match percentages
+    id_match_percentage = (len(unique_matched_ids) / source_count) * 100 if source_count > 0 else 0
+    
+    # Count full matches (ID + comment match)
+    full_matches = sum(1 for match in match_details if match["comment_match"])
+    full_match_percentage = (full_matches / source_count) * 100 if source_count > 0 else 0
+    
+    return {
+        "success": True,
+        "source_count": source_count,
+        "target_count": target_count,
+        "matched_source_ids": len(unique_matched_ids),
+        "migrated_target_changesets": len(migrated_cs),
+        "full_matches": full_matches,
+        "id_match_percentage": id_match_percentage,
+        "full_match_percentage": full_match_percentage,
+        # Add a list of unmatched source IDs for reporting
+        "unmatched_source_ids": [id for id in source_cs_dict.keys() if id not in unique_matched_ids]
     }
 
 if __name__ == "__main__":
+    ascii_art = pyfiglet.figlet_format("by codewizard", font="ogre")
+    print(ascii_art)
     #get_items(SOURCE_ORGANIZATION, SOURCE_PROJECT,"$/TFS-based test project", SOURCE_AUTHENTICATION_HEADER)
     #get_item_content(SOURCE_ORGANIZATION, SOURCE_PROJECT,"$/TFS-based test project/branchWithin/tulip/tlp.md", SOURCE_AUTHENTICATION_HEADER)
     #get_labels(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER)
     #get_changesets(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER)
     #compare_structure(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, "$/TFS-based test project", TARGET_ORGANIZATION, TARGET_PROJECT, TARGET_AUTHENTICATION_HEADER, "$/Magnolia", "/Users/pyruc/Desktop/TFVC-to-Git")
-    sample_content(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, "$/TFS-based test project", TARGET_ORGANIZATION, TARGET_PROJECT, TARGET_AUTHENTICATION_HEADER, "$/Magnolia", "/Users/pyruc/Desktop/TFVC-to-Git", 300)
+    #sample_content(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, "$/TFS-based test project", TARGET_ORGANIZATION, TARGET_PROJECT, TARGET_AUTHENTICATION_HEADER, "$/Magnolia", "/Users/pyruc/Desktop/TFVC-to-Git", 30)
+    compare_changesets(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, TARGET_ORGANIZATION, TARGET_PROJECT, TARGET_AUTHENTICATION_HEADER, "/Users/pyruc/Desktop/TFVC-to-Git", 30)

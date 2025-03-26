@@ -8,6 +8,7 @@ import tqdm
 import csv
 import re
 import random
+import time
 import pyfiglet
 
 load_dotenv()
@@ -393,6 +394,24 @@ def compare_changesets(source_organization, source_project_name, source_header,
     source_changesets_count = len(source_cs)
     target_changesets_count = len(target_cs)
     
+    def normalize_comment_for_comparison(comment):
+        """
+        This function is a helper function that normalizes a comment string for more reliable comparison as follows:
+        • Removes or normalizes double quotes.
+        • Removes extra whitespace.
+        • Handles truncation.
+        """
+        if not comment:
+            return ""
+        
+        # Replaces double escaped quotes ("") with single quotes (") and then removes any remaining quotes.
+        normalized = comment.replace('""', '"').replace('"', '')
+        
+        # Remove extra whitespace and trim
+        normalized = ' '.join(normalized.split())
+        
+        return normalized.strip()
+
     # Creates a lookup dictionary of source changesets by ID and comment.
     source_changesets_dictionary = {str(cs.get('changesetId')): {
         'comment': cs.get('comment', ''),
@@ -440,8 +459,13 @@ def compare_changesets(source_organization, source_project_name, source_header,
                 comment_match = False
                 
                 if match_type == "full" and extracted_comment:
-                    # Checks whether the extracted comment is contained in the source comment (allowing for truncation).
-                    if source_comment.startswith(extracted_comment) or extracted_comment in source_comment:
+                    normalized_source = normalize_comment_for_comparison(source_comment)
+                    normalized_extracted = normalize_comment_for_comparison(extracted_comment)
+                    # Checks whether the extracted comment is contained in the source comment.
+                    if (normalized_source in normalized_extracted or 
+                        normalized_extracted in normalized_source or
+                        normalized_source.startswith(normalized_extracted) or 
+                        normalized_extracted.startswith(normalized_source)):
                         comment_match = True
                 
                 match_details.append({
@@ -490,7 +514,7 @@ def compare_changesets(source_organization, source_project_name, source_header,
     # Calculates match percentages.
     id_match_percentage = (len(unique_matched_ids) / source_changesets_count) * 100 if source_changesets_count > 0 else 0
     
-    # Count full matches (ID + comment match)
+    # Counts full matches (id + comment match).
     full_matches = sum(1 for match in match_details if match["comment_match"])
     full_match_percentage = (full_matches / source_changesets_count) * 100 if source_changesets_count > 0 else 0
     
@@ -506,13 +530,185 @@ def compare_changesets(source_organization, source_project_name, source_header,
         "unmatched_source_ids": [id for id in source_changesets_dictionary.keys() if id not in unique_matched_ids]
     }
 
-if __name__ == "__main__":
+def compare_labels(source_organization, source_project_name, source_header, # REVIEW.
+                   target_organization, target_project_name, target_headers, 
+                   results_folder):
+    """
+    Compare labels between source and target repositories.
+    """
+    print("Comparing repository labels...")
+    
+    source_labels = get_labels(source_organization, source_project_name, source_header)
+    target_labels = get_labels(target_organization, target_project_name, target_headers)
+    
+    if not source_labels or not target_labels:
+        return {"success": False, "error": "Failed to retrieve labels"}
+    
+    # Create dictionaries by label name
+    source_dict = {label['name']: label for label in source_labels.get('value', [])}
+    target_dict = {label['name']: label for label in target_labels.get('value', [])}
+    
+    # Compare counts
+    source_count = len(source_dict)
+    target_count = len(target_dict)
+    
+    # Find missing and extra labels
+    source_names = set(source_dict.keys())
+    target_names = set(target_dict.keys())
+    
+    missing_labels = source_names - target_names
+    extra_labels = target_names - source_names
+    
+    # Write results to CSV
+    with open(f"{results_folder}/label_comparison.csv", "w", newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(["Type", "Label Name", "Owner"])
+        
+        for name in missing_labels:
+            writer.writerow(["Missing", name, source_dict[name].get('owner', {}).get('displayName', 'N/A')])
+        
+        for name in extra_labels:
+            writer.writerow(["Extra", name, target_dict[name].get('owner', {}).get('displayName', 'N/A')])
+    
+    return {
+        "success": True,
+        "source_count": source_count,
+        "target_count": target_count,
+        "missing_count": len(missing_labels),
+        "extra_count": len(extra_labels),
+        "matching_count": len(source_names.intersection(target_names))
+    }
+
+def output_summary_report(results, results_folder):
+    """
+    Write verification summary to JSON file and print to console.
+    """
+    # Outputs summary to a JSON file.
+    with open(f"{results_folder}/verification_summary.json", "w") as f:
+        json.dump(results, f, indent=2)
+    
+    structure_result = results["structure"]["passed"]
+    content_result = results["content"]["passed"]
+    changesets_result = results["changesets"]["passed"]
+    labels_result = results["labels"]["passed"]
+    verification_passed = results["verification_passed"]
+    
+    print("\n" + "\033[1m=\033[0m" * 100)
+    print("\033[1mSTARTING TFVC CODEBASE VERIFICATION RESULTS\033[0m")
+    print("\033[1m=\033[0m" * 100)
+
+    print(f"• Overall Verification: {'✅ PASSED' if verification_passed else '❌ FAILED'}")
+    print(f"• Verification Duration: {results['duration_seconds']} seconds")
+
+    print("\nStructure Check:", "✅ PASSED" if structure_result else "❌ FAILED")
+    print(f"├──Source TFVC Items: {results['structure']['source_count']}")
+    print(f"├──Target TFVC Items: {results['structure']['target_count']}")
+    print(f"├──Missing TFVC Items: {results['structure']['missing']}")
+    print(f"└──Extra TFVC Items: {results['structure']['extra']}")
+    
+    print("\nContent Check:", "✅ PASSED" if content_result else "❌ FAILED")
+    print(f"├──Sample Size: {results['content']['sample_size']}")
+    print(f"└──Match Percentage: {results['content']['match_percentage']:.2f}%")
+    
+    print("\nChangesets Check:", "✅ PASSED" if changesets_result else "❌ FAILED")
+    print(f"├──Source Changesets: {results['changesets']['source_count']}")
+    print(f"├──Target Changesets: {results['changesets']['target_count']}")
+    print(f"├──Matched Source IDs: {results['changesets']['matched_source_ids']} ({results['changesets']['id_match_percentage']:.2f}%)")
+    print(f"├──Full Matches (changeset id + changeset comment): {results['changesets']['full_matches']} ({results['changesets']['full_match_percentage']:.2f}%)")
+    
+    if "unmatched_source_ids" in results["changesets"] and results["changesets"]["unmatched_source_ids"]:
+        print(f"└──Unmatched Source IDs: {', '.join(results['changesets']['unmatched_source_ids'])}")
+    
+    '''
+    print("\nLabels Check:", "✅ PASSED" if labels_result else "❌ FAILED")
+    print(f"├──Source Labels: {results['labels']['source_count']}")
+    print(f"├──Target Labels: {results['labels']['target_count']}")
+    print(f"├──Missing Labels: {results['labels']['missing_count']}")
+    print(f"└──Extra Labels: {results['labels']['extra_count']}")'
+    '''
+    
+    print(f"\nDetailed results saved in the '{os.path.dirname(os.path.abspath(__file__))}' folder.")
+
+def tfvc_codebase_verification(source_organization, source_project_name, source_header, source_tfvc_path,
+                     target_organization, target_project_name, target_header, target_tfvc_path):
+    """
+    This function verifies a TFVC-to-TFVC migration by comparing the structure, content, changesets, and labels.
+    """
     ascii_art = pyfiglet.figlet_format("by codewizard", font="ogre")
     print(ascii_art)
-    #get_items(SOURCE_ORGANIZATION, SOURCE_PROJECT,"$/TFS-based test project", SOURCE_AUTHENTICATION_HEADER)
-    #get_item_content(SOURCE_ORGANIZATION, SOURCE_PROJECT,"$/TFS-based test project/branchWithin/tulip/tlp.md", SOURCE_AUTHENTICATION_HEADER)
-    #get_labels(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER)
-    #get_changesets(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER)
-    #compare_structure(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, "$/TFS-based test project", TARGET_ORGANIZATION, TARGET_PROJECT, TARGET_AUTHENTICATION_HEADER, "$/Magnolia", "/Users/pyruc/Desktop/TFVC-to-Git")
-    #sample_content(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, "$/TFS-based test project", TARGET_ORGANIZATION, TARGET_PROJECT, TARGET_AUTHENTICATION_HEADER, "$/Magnolia", "/Users/pyruc/Desktop/TFVC-to-Git", 30)
-    compare_changesets(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, TARGET_ORGANIZATION, TARGET_PROJECT, TARGET_AUTHENTICATION_HEADER, "/Users/pyruc/Desktop/TFVC-to-Git", 30)
+
+    start_time = time.time()
+
+    print("\n" + "\033[1m=\033[0m" * 100)
+    print("\033[1mSTARTING TFVC CODEBASE VERIFICATION\033[0m")
+    print("\033[1m=\033[0m" * 100)
+    
+    print(f"• Source environment: {source_organization}/{source_project_name} → {source_tfvc_path}")
+    print(f"• Target environment: {target_organization}/{target_project_name} → {target_tfvc_path}\n")
+
+    # Gets the script's directory to save the CSV files there.
+    results_folder = os.path.dirname(os.path.abspath(__file__))
+    
+    structure_comparison_results = compare_structure(source_organization, source_project_name, source_header, source_tfvc_path,
+                                          target_organization, target_project_name, target_header, target_tfvc_path, results_folder)
+    
+    content_comparison_results = sample_content(source_organization, source_project_name, source_header, source_tfvc_path,
+                                     target_organization, target_project_name, target_header, target_tfvc_path, results_folder, 30)
+    
+    changeset_comparison_results = compare_changesets(source_organization, source_project_name, source_header,
+                                           target_organization, target_project_name, target_header, results_folder, 30)
+    
+    label_comparison_results = compare_labels(source_organization, source_project_name, source_header,
+                                   target_organization, target_project_name, target_header, results_folder)
+    
+    # Determines if checks passed.
+    structure_match = structure_comparison_results.get("missing_count", 1) == 0 if structure_comparison_results.get("success", False) else False
+    content_match = content_comparison_results.get("match_percentage", 0) == 100 if content_comparison_results.get("success", False) else False
+    changeset_match = changeset_comparison_results.get("id_match_percentage", 0) >= 87 if changeset_comparison_results.get("success", False) else False
+    label_match = label_comparison_results.get("missing_count", 1) == 0 if label_comparison_results.get("success", False) else False
+    
+    # Calculates overall migration status.
+    verification_passed = structure_match and content_match and changeset_match and label_match
+    verification_duration = round(time.time() - start_time, 2)
+    
+    # Creates summary report.
+    summary = {
+        "verification_passed": verification_passed,
+        "duration_seconds": verification_duration,
+        "structure": {
+            "passed": structure_match,
+            "source_count": structure_comparison_results.get("source_count", 0),
+            "target_count": structure_comparison_results.get("target_count", 0),
+            "missing": structure_comparison_results.get("missing_count", 0),
+            "extra": structure_comparison_results.get("extra_count", 0)
+        },
+        "content": {
+            "passed": content_match,
+            "sample_size": content_comparison_results.get("sample_size", 0),
+            "match_percentage": content_comparison_results.get("match_percentage", 0)
+        },
+        "changesets": {
+            "passed": changeset_match,
+            "source_count": changeset_comparison_results.get("source_count", 0),
+            "target_count": changeset_comparison_results.get("target_count", 0),
+            "matched_source_ids": changeset_comparison_results.get("matched_source_ids", 0),
+            "full_matches": changeset_comparison_results.get("full_matches", 0),
+            "id_match_percentage": changeset_comparison_results.get("id_match_percentage", 0),
+            "full_match_percentage": changeset_comparison_results.get("full_match_percentage", 0),
+            "unmatched_source_ids": changeset_comparison_results.get("unmatched_source_ids", [])
+        },
+        "labels": {
+            "passed": label_match,
+            "source_count": label_comparison_results.get("source_count", 0),
+            "target_count": label_comparison_results.get("target_count", 0),
+            "missing": label_comparison_results.get("missing_count", 0),
+            "extra": label_comparison_results.get("extra_count", 0)
+        }
+    }
+    
+    output_summary_report(summary, results_folder)
+    
+    return verification_passed
+
+if __name__ == "__main__":
+    tfvc_codebase_verification(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, "$/TFS-based test project", TARGET_ORGANIZATION, TARGET_PROJECT, TARGET_AUTHENTICATION_HEADER, "$/Magnolia")

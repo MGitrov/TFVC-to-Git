@@ -552,28 +552,34 @@ def compare_labels(source_organization, source_project_name, source_header, # RE
     source_labels_count = len(source_labels_dictionary)
     target_labels_count = len(target_labels_dictionary)
     
-    # Find missing and extra labels
-    source_names = set(source_dict.keys())
-    target_names = set(target_dict.keys())
+    # Finds missing and/or extra labels between the repositories.
+    source_names = set(source_labels_dictionary.keys())
+    target_names = set(target_labels_dictionary.keys())
     
     missing_labels = source_names - target_names
     extra_labels = target_names - source_names
     
-    # Write results to CSV
-    with open(f"{results_folder}/label_comparison.csv", "w", newline='') as f:
+    # Outputs the results to a CSV file.
+    with open(f"{results_folder}/labels_comparison.csv", "w", newline='') as f:
         writer = csv.writer(f)
         writer.writerow(["Type", "Label Name", "Owner"])
+
+        if not missing_labels and not extra_labels:
+            writer.writerow(["INFO", "All labels match", "N/A"])
         
-        for name in missing_labels:
-            writer.writerow(["Missing", name, source_dict[name].get('owner', {}).get('displayName', 'N/A')])
-        
-        for name in extra_labels:
-            writer.writerow(["Extra", name, target_dict[name].get('owner', {}).get('displayName', 'N/A')])
+        else:
+            # Writes missing items.
+            for name in missing_labels:
+                writer.writerow(["MISSING FROM TARGET", name, source_labels_dictionary[name].get('owner', {}).get('displayName', 'N/A')])
+            
+            # Writes extra items.
+            for name in extra_labels:
+                writer.writerow(["EXTRA IN TARGET", name, target_labels_dictionary[name].get('owner', {}).get('displayName', 'N/A')])
     
     return {
         "success": True,
-        "source_count": source_count,
-        "target_count": target_count,
+        "source_count": source_labels_count,
+        "target_count": target_labels_count,
         "missing_count": len(missing_labels),
         "extra_count": len(extra_labels),
         "matching_count": len(source_names.intersection(target_names))
@@ -619,13 +625,12 @@ def output_summary_report(results, results_folder):
     if "unmatched_source_ids" in results["changesets"] and results["changesets"]["unmatched_source_ids"]:
         print(f"└──Unmatched Source IDs: {', '.join(results['changesets']['unmatched_source_ids'])}")
     
-    '''
+
     print("\nLabels Check:", "✅ PASSED" if labels_result else "❌ FAILED")
     print(f"├──Source Labels: {results['labels']['source_count']}")
     print(f"├──Target Labels: {results['labels']['target_count']}")
-    print(f"├──Missing Labels: {results['labels']['missing_count']}")
-    print(f"└──Extra Labels: {results['labels']['extra_count']}")'
-    '''
+    print(f"├──Missing Labels: {results['labels']['missing']}")
+    print(f"└──Extra Labels: {results['labels']['extra']}")
     
     print(f"\nDetailed results saved in the '{os.path.dirname(os.path.abspath(__file__))}' folder.")
 

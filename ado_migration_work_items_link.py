@@ -133,41 +133,45 @@ def get_codebase_objects(organization, project_name, authentication_header, repo
         }
     }
     
-    # If repository_info is not provided, discover repositories
     if not repository_info:
-        # Check if project has TFVC
+        # Checks whether the project contains at least one TFVC-based repository by fetching the latest changeset.
         tfvc_url = f"{organization}/{project_name}/_apis/tfvc/changesets?$top=1&api-version={api_version}"
+
         try:
             tfvc_response = requests.get(tfvc_url, headers=authentication_header)
             has_tfvc = tfvc_response.status_code == 200 and len(tfvc_response.json().get("value", [])) > 0
+
         except:
             has_tfvc = False
         
-        # Get Git repositories
+        # Checks for Git repositories.
         git_repos = []
         git_url = f"{organization}/{project_name}/_apis/git/repositories?api-version={api_version}"
+
         try:
             git_response = requests.get(git_url, headers=authentication_header)
+
             if git_response.status_code == 200:
                 git_repos = git_response.json().get("value", [])
+
         except:
             git_repos = []
         
-        # Process TFVC if present
+        # Has TFVC repositories.
         if has_tfvc:
-            print(f"[INFO] Detected TFVC in project. Fetching TFVC objects...")
-            result['tfvc']['changesets'] = get_tfvc_changesets(organization, project_name, authentication_header, from_date, to_date)
+            print(f"[INFO] A TFVC-based repository was detected, fetching TFVC codebase objects...")
+            result['tfvc']['changesets'] = get_tfvc_changesets(organization, project_name, authentication_header)
         
-        # Process Git repositories
+        # Has Git repositories.
         for repo in git_repos:
-            repo_id = repo.get("id")
-            repo_name = repo.get("name", repo_id)
-            print(f"[INFO] Processing Git repository: {repo_name} (ID: {repo_id})")
+            repository_id = repo.get("id")
+            repository_name = repo.get("name", repository_id)
+
+            print(f"[INFO] Fetching Git codebase objects for repository '{repository_name}' (id: '{repository_id}')...")
             
-            # Fetch Git objects
-            result['git']['commits'].extend(get_git_commits(organization, project_name, authentication_header, repo_id, from_date, to_date))
-            result['git']['pullrequests'].extend(get_git_pullrequests(organization, project_name, authentication_header, repo_id))
-            result['git']['branches'].extend(get_git_branches(organization, project_name, authentication_header, repo_id))
+            result['git']['commits'].extend(get_git_commits(organization, project_name, authentication_header, repository_id))
+            result['git']['pull_requests'].extend(get_git_pullrequests(organization, project_name, authentication_header, repository_id))
+            result['git']['branches'].extend(get_git_branches(organization, project_name, authentication_header, repository_id))
     
     else:
         repository_type = repository_info.get('type', '').lower()
@@ -180,19 +184,19 @@ def get_codebase_objects(organization, project_name, authentication_header, repo
         elif repository_type == 'git' and repository_id:
             print(f"[INFO] Fetching Git codebase objects for repository id '{repository_id}'...")
             result['git']['commits'] = get_git_commits(organization, project_name, authentication_header, repository_id)
-            result['git']['pullrequests'] = get_git_pullrequests(organization, project_name, authentication_header, repo_id)
-            result['git']['branches'] = get_git_branches(organization, project_name, authentication_header, repo_id)
+            result['git']['pull_requests'] = get_git_pullrequests(organization, project_name, authentication_header, repository_id)
+            result['git']['branches'] = get_git_branches(organization, project_name, authentication_header, repository_id)
         
         else:
-            print(f"[ERROR] Invalid repository_info provided. Must include 'type' ('tfvc' or 'git') and 'id' for Git repositories.")
+            print(f"\033[1;31m[ERROR] Invalid repository details; must include 'type' ('tfvc' or 'git') field and 'id' field for Git repositories.\033[0m")
+            return None
     
-    # Count totals for logging
-    git_total = len(result['git']['commits']) + len(result['git']['pullrequests']) + len(result['git']['branches'])
-    tfvc_total = len(result['tfvc']['changesets'])
+    total_git_objects = len(result['git']['commits']) + len(result['git']['pull_requests']) + len(result['git']['branches'])
+    total_tfvc_objects = len(result['tfvc']['changesets'])
     
-    print(f"[INFO] Retrieved a total of {git_total + tfvc_total} codebase objects:")
-    print(f"  - Git: {git_total} objects ({len(result['git']['commits'])} commits, {len(result['git']['pullrequests'])} PRs, {len(result['git']['branches'])} branches)")
-    print(f"  - TFVC: {tfvc_total} changesets")
+    print(f"[INFO] Retrieved a total of {total_git_objects + total_tfvc_objects} codebase objects:")
+    print(f"  • Git: {len(result['git']['commits'])} commit(s), {len(result['git']['pull_requests'])} pull request(s), {len(result['git']['branches'])} branch(es)")
+    print(f"  • TFVC: {total_tfvc_objects} changesets")
     
     return result
 
@@ -326,7 +330,7 @@ def get_git_branches(organization, project_name, authentication_header, reposito
         print(f"\033[1;31m[ERROR] An error occurred while fetching Git branches: {e}\033[0m")
         return []
 
-def get_git_repo_id(organization, project, authentication_header, repository_name):
+def get_git_repo_id(organization, project, authentication_header, repository_name): # HELPER.
     """
     Retrieves the repository ID of a Git repository in Azure DevOps.
 
@@ -356,4 +360,5 @@ if __name__ == "__main__":
     #get_tfvc_changesets(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER)
     #get_git_commits(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, get_git_repo_id(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, "dmy_rpstry"))
     #get_git_pullrequests(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, get_git_repo_id(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, "dmy_rpstry"))
-    get_git_branches(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, get_git_repo_id(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, "Dumbo"))
+    #get_git_branches(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, get_git_repo_id(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, "Dumbo"))
+    get_codebase_objects(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER)

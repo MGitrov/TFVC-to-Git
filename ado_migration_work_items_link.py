@@ -55,6 +55,7 @@ def get_work_items(organization, project_name, authentication_header, work_item_
 
                 if response.status_code == 200:
                     batch_items = response.json().get("value", [])
+                    #print(f"\n{batch_items}\n")
                     work_items.extend(batch_items)
                     print(f"[INFO] Retrieved {len(batch_items)} work items in batch.")
 
@@ -475,6 +476,260 @@ def extract_work_item_references(work_items):
     
     return work_item_to_codebase
 
+def create_work_item_codebase_links(organization, project_name, authentication_header, work_item_codebase_mapping, id_mapping=None):
+    """
+    This function creates links between work items and codebase objects in the target system.
+    
+    Parameters:
+    - organization: Target Azure DevOps organization URL
+    - project_name: Target project name
+    - authentication_header: Authentication header with PAT for target system
+    - work_item_codebase_mapping: Dictionary mapping source work item IDs to codebase objects
+                                 (as returned by extract_work_item_codebase_links)
+    - id_mapping: Dictionary mapping source IDs to target IDs
+                 Format: {'work_items': {source_id: target_id, ...},
+                          'git_repositories': {source_id: target_id, ...},
+                          'git_commits': {source_hash: target_hash, ...},
+                          'git_pullrequests': {source_id: target_id, ...}}
+    
+    Returns:
+    - Dictionary with results of link creation operations
+    """
+    print("##############################")
+    print(f"[INFO] Creating work item to codebase links in '{project_name}'...")
+    
+    results = {
+        'success': 0,
+        'failed': 0,
+        'skipped': 0,
+        'details': {}
+    }
+    
+    # Prepare mapping dictionaries
+    work_item_id_map = {}
+    if id_mapping and 'work_items' in id_mapping:
+        work_item_id_map = id_mapping['work_items']
+    
+    # Process each work item and its codebase links
+    for source_work_item_id, codebase_links in work_item_codebase_mapping.items():
+        # Get target work item ID
+        target_work_item_id = work_item_id_map.get(int(source_work_item_id))
+        
+        if not target_work_item_id:
+            print(f"[WARNING] No target ID mapping found for work item {source_work_item_id}. Skipping...")
+            results['skipped'] += len(codebase_links)
+            continue
+        
+        print(f"[INFO] Processing links for work item {source_work_item_id} → {target_work_item_id}")
+        
+        # Track results for this work item
+        item_results = {
+            'success': 0,
+            'failed': 0,
+            'skipped': 0,
+            'links': []
+        }
+        
+        # Process each codebase link
+        for link in codebase_links:
+            link_type = link.get('type')
+            link_name = link.get('name')
+            source_url = link.get('url')
+            
+            # Map the codebase reference to target system
+            target_reference = create_target_reference_url(link, id_mapping)
+            
+            if not target_reference:
+                print(f"[WARNING] Could not map codebase reference for {link_type}. Skipping...")
+                item_results['skipped'] += 1
+                continue
+            
+            # Create the link in the target system
+            success, message = create_link(
+                organization, 
+                project_name, 
+                authentication_header, 
+                target_work_item_id, 
+                target_reference,
+                link_name
+            )
+            
+            # Track the result
+            if success:
+                item_results['success'] += 1
+                print(f"[INFO] Successfully created {link_type} link for work item {target_work_item_id}")
+            else:
+                item_results['failed'] += 1
+                print(f"[ERROR] Failed to create {link_type} link for work item {target_work_item_id}: {message}")
+            
+            # Record details
+            item_results['links'].append({
+                'type': link_type,
+                'name': link_name,
+                'source_url': source_url,
+                'target_reference': target_reference,
+                'success': success,
+                'message': message
+            })
+        
+        # Update overall results
+        results['success'] += item_results['success']
+        results['failed'] += item_results['failed']
+        results['skipped'] += item_results['skipped']
+        results['details'][target_work_item_id] = item_results
+        
+        # Log summary for this work item
+        print(f"[INFO] Work item {target_work_item_id} link creation summary: "
+              f"{item_results['success']} successful, "
+              f"{item_results['failed']} failed, "
+              f"{item_results['skipped']} skipped")
+    
+    # Log overall summary
+    print(f"[INFO] Overall link creation summary: "
+          f"{results['success']} successful, "
+          f"{results['failed']} failed, "
+          f"{results['skipped']} skipped")
+    
+    return results
+
+def create_target_reference_url(link, id_mapping=None):
+    """
+    Creates the target reference URL based on the source link information and ID mappings.
+    
+    Parameters:
+    - link: Dictionary containing link information (type, id, url, etc.)
+    - id_mapping: Dictionary with mappings between source and target IDs
+    
+    Returns:
+    - String with the target reference URL, or None if mapping failed
+    """
+    if not id_mapping:
+        print(f"[WARNING] No ID mapping provided for codebase objects.")
+        return None
+    
+    link_type = link.get('type')
+    link_id = link.get('id')
+    
+    if link_type == 'tfvc_changeset':
+        # Map TFVC changeset
+        if 'tfvc_changesets' in id_mapping and link_id in id_mapping['tfvc_changesets']:
+            target_changeset_id = id_mapping['tfvc_changesets'][link_id]
+            return f"vstfs:///VersionControl/Changeset/{target_changeset_id}"
+        else:
+            print(f"[WARNING] No mapping found for TFVC changeset {link_id}")
+            return None
+            
+    elif link_type == 'git_commit':
+        # Map Git commit
+        if 'git_commits' in id_mapping and link_id in id_mapping['git_commits']:
+            target_commit = id_mapping['git_commits'][link_id]
+            
+            # The repository ID should be included in the link information
+            source_repo_id = link.get('repositoryId')
+            if not source_repo_id:
+                print(f"[WARNING] No repository ID found for Git commit {link_id}")
+                return None
+                
+            target_repo_id = id_mapping.get('git_repositories', {}).get(source_repo_id)
+            
+            if target_repo_id and target_commit:
+                return f"vstfs:///Git/Commit/{target_repo_id}%2F{target_commit}"
+            else:
+                print(f"[WARNING] Could not map repository for Git commit {link_id}")
+                return None
+        else:
+            print(f"[WARNING] No mapping found for Git commit {link_id}")
+            return None
+            
+    elif link_type == 'git_pullrequest':
+        # Map Git pull request
+        if 'git_pullrequests' in id_mapping and link_id in id_mapping['git_pullrequests']:
+            target_pr_id = id_mapping['git_pullrequests'][link_id]
+            
+            # The repository ID should be included in the link information
+            source_repo_id = link.get('repositoryId')
+            if not source_repo_id:
+                print(f"[WARNING] No repository ID found for Git pull request {link_id}")
+                return None
+                
+            target_repo_id = id_mapping.get('git_repositories', {}).get(source_repo_id)
+            
+            if target_repo_id and target_pr_id:
+                return f"vstfs:///Git/PullRequestId/{target_repo_id}%2F{target_pr_id}"
+            else:
+                print(f"[WARNING] Could not map repository for Git pull request {link_id}")
+                return None
+        else:
+            print(f"[WARNING] No mapping found for Git pull request {link_id}")
+            return None
+            
+    elif link_type == 'git_branch':
+        # Map Git branch
+        if 'git_branches' in id_mapping and link_id in id_mapping['git_branches']:
+            target_branch = id_mapping['git_branches'][link_id]
+            
+            # The repository ID should be included in the link information
+            source_repo_id = link.get('repositoryId')
+            if not source_repo_id:
+                print(f"[WARNING] No repository ID found for Git branch {link_id}")
+                return None
+                
+            target_repo_id = id_mapping.get('git_repositories', {}).get(source_repo_id)
+            
+            if target_repo_id and target_branch:
+                return f"vstfs:///Git/Ref/{target_repo_id}%2FGB{target_branch}"
+            else:
+                print(f"[WARNING] Could not map repository for Git branch {link_id}")
+                return None
+        else:
+            print(f"[WARNING] No mapping found for Git branch {link_id}")
+            return None
+    
+    else:
+        print(f"[WARNING] Unsupported link type: {link_type}")
+        return None
+
+def create_link(organization, project_name, authentication_header, work_item_id, reference_url, link_name):
+    """
+    This function creates a link between a work item and a codebase object.
+    
+    Returns:
+    • Tuple (success\fail, message)
+    """
+    api_version = "7.1"
+    url = f"{organization}/{project_name}/_apis/wit/workitems/{work_item_id}?api-version={api_version}"
+    
+    payload = [
+        {
+            "op": "add",
+            "path": "/relations/-", # Appends to the 'relations' array.
+            "value": {
+                "rel": "ArtifactLink",
+                "url": reference_url,
+                "attributes": {
+                    "name": link_name
+                }
+            }
+        }
+    ]
+    
+    headers = {
+        **authentication_header,
+        "Content-Type": "application/json-patch+json" # A required content type for PATCH operations using Azure DevOps' REST API.
+    }
+    
+    try:
+        response = requests.patch(url, headers=headers, json=payload)
+        
+        if response.status_code in (200, 201):
+            return True, "[SUCCESS] Link created successfully"
+        
+        else:
+            return False, f"[ERROR] {response.status_code}: {response.text}"
+            
+    except requests.exceptions.RequestException as e:
+        return False, f"[ERROR]: {str(e)}"
+
 def get_git_repo_id(organization, project, authentication_header, repository_name): # HELPER.
     """
     Retrieves the repository ID of a Git repository in Azure DevOps.
@@ -507,4 +762,4 @@ if __name__ == "__main__":
     #get_git_pullrequests(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, get_git_repo_id(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, "dmy_rpstry"))
     #get_git_branches(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, get_git_repo_id(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, "Dumbo"))
     #codebase_objects = get_codebase_objects(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER)
-    extract_work_item_references(work_items)
+    #extract_work_item_references(work_items)

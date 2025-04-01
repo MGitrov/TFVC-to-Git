@@ -39,7 +39,11 @@ def get_work_items(organization, project_name, authentication_header, work_item_
     print(f"[INFO] Fetching work items from '{project_name}' in '{organization}'...")
     
     try:
-        if work_item_ids:
+        if work_item_ids is not None:
+            if len(work_item_ids) == 0:
+                print(f"[INFO] No work item IDs provided, returning empty list.")
+                return []
+            
             work_items = []
             batch_size = 200  # Azure DevOps' API limit.
             
@@ -120,7 +124,7 @@ def get_codebase_objects(organization, project_name, authentication_header, repo
     api_version = "7.1"
     
     print("##############################")
-    print(f"[INFO] Fetching all codebase objects from '{project_name}' in '{organization}'...")
+    print(f"[INFO] Fetching codebase objects from '{project_name}' in '{organization}'...")
     
     # Initializes return structure.
     result = {
@@ -230,6 +234,44 @@ def get_tfvc_changesets(organization, project_name, authentication_header):
             
     except requests.exceptions.RequestException as e:
         print(f"\033[1;31m[ERROR] An error occurred while fetching TFVC changesets: {e}\033[0m")
+        return []
+
+def get_git_repositories(organization, project_name, authentication_header):
+    """
+    This function fetches all Git repositories of a project.
+    """
+    api_version = "7.1"
+    url = f"{organization}/{project_name}/_apis/git/repositories?api-version={api_version}"
+    
+    print(f"[INFO] Fetching Git repositories from '{project_name}' in '{organization}'...")
+    
+    try:
+        response = requests.get(url, headers=authentication_header)
+        print(f"[DEBUG] Request's Status Code: {response.status_code}")
+        
+        if response.status_code == 200:
+            repositories = response.json().get("value", [])
+            print(f"[INFO] Found {len(repositories)} Git repositories.")
+            
+            if repositories:
+                print("-" * 50)  # Visual separator
+                for repo in repositories:
+                    repo_name = repo.get("name", "Unknown Name")
+                    repo_id = repo.get("id", "Unknown ID")
+                    print(f"Name: {repo_name}")
+                    print(f"ID: {repo_id}")
+                    print("-" * 50)  # Visual separator
+            
+            return repositories
+            
+        else:
+            print(f"\033[1;31m[ERROR] Failed to fetch Git repositories.\033[0m")
+            print(f"[DEBUG] Request's Status Code: {response.status_code}")
+            print(f"[DEBUG] Response Body: {response.text}")
+            return []
+            
+    except requests.exceptions.RequestException as e:
+        print(f"\033[1;31m[ERROR][ERROR] An error occurred while fetching Git repositories: {e}\033[0m")
         return []
 
 def get_git_commits(organization, project_name, authentication_header, repository_id):
@@ -491,27 +533,27 @@ def map_objects(source_organization, source_project, source_authentication_heade
     }
     
     # Step 1: Maps work items by their title and type.
-    work_item_mapping = build_work_item_mapping(
-        source_organization, source_project, source_auth_header,
-        target_organization, target_project, target_auth_header
+    work_items_mapping = map_work_items(
+        source_organization, source_project, source_authentication_header,
+        target_organization, target_project, target_authentication_header
     )
 
-    mapping['work_items'] = work_item_mapping['work_items']
+    mapping['work_items'] = work_items_mapping['work_items']
     
-    # Step 2: Map Git repositories by name
-    source_repos = get_git_repositories(source_organization, source_project, source_auth_header)
-    target_repos = get_git_repositories(target_organization, target_project, target_auth_header)
+    # Step 2: Maps Git repositories by their name.
+    source_repositories = get_git_repositories(source_organization, source_project, source_authentication_header)
+    target_repositories = get_git_repositories(target_organization, target_project, target_authentication_header)
     
-    for source_repo in source_repos:
-        source_id = source_repo.get('id')
-        source_name = source_repo.get('name')
+    for source_repository in source_repositories:
+        source_id = source_repository.get('id')
+        source_name = source_repository.get('name')
         
-        for target_repo in target_repos:
-            if target_repo.get('name') == source_name:
-                mapping['git_repositories'][source_id] = target_repo.get('id')
+        for target_repository in target_repositories:
+            if target_repository.get('name') == source_name:
+                mapping['git_repositories'][source_id] = target_repository.get('id')
                 break
     
-    # Step 3: For each mapped repository, handle commits, branches, and PRs
+    """     # Step 3: For each mapped repository, handle commits, branches, and PRs
     for source_repo_id, target_repo_id in mapping['git_repositories'].items():
         # Map commits by hash
         source_commits = get_git_commits(source_organization, source_project, source_auth_header, source_repo_id)
@@ -546,7 +588,7 @@ def map_objects(source_organization, source_project, source_authentication_heade
         target_prs = get_git_pullrequests(target_organization, target_project, target_auth_header, target_repo_id)
         
         pr_mapping = map_pull_requests_with_work_items(source_prs, target_prs, mapping['work_items'])
-        mapping['git_pullrequests'].update(pr_mapping)
+        mapping['git_pullrequests'].update(pr_mapping) """
     
     return mapping
 
@@ -877,7 +919,9 @@ if __name__ == "__main__":
     #get_git_branches(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, get_git_repo_id(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, "Dumbo"))
     #codebase_objects = get_codebase_objects(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER)
     #extract_work_item_references(work_items)
-    work_items_mapping = map_work_items(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER,
-                          TARGET_ORGANIZATION, TARGET_PROJECT, TARGET_AUTHENTICATION_HEADER)
-    
-    print(f"\n{work_items_mapping}")
+    mapping = map_objects(
+        SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER,
+        TARGET_ORGANIZATION, TARGET_PROJECT, TARGET_AUTHENTICATION_HEADER
+    )
+
+    print(f"\n{mapping  }")

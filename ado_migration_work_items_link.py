@@ -247,7 +247,7 @@ def get_git_repositories(organization, project_name, authentication_header):
     
     try:
         response = requests.get(url, headers=authentication_header)
-        print(f"[DEBUG] Request's Status Code: {response.status_code}")
+        #print(f"[DEBUG] Request's Status Code: {response.status_code}")
         
         if response.status_code == 200:
             repositories = response.json().get("value", [])
@@ -283,7 +283,7 @@ def get_git_commits(organization, project_name, authentication_header, repositor
     
     try:
         response = requests.get(url, headers=authentication_header)
-        print(f"[DEBUG] Request's Status Code: {response.status_code}")
+        #print(f"[DEBUG] Request's Status Code: {response.status_code}")
         
         if response.status_code == 200:
             commits = response.json().get("value", [])
@@ -553,11 +553,11 @@ def map_objects(source_organization, source_project, source_authentication_heade
                 mapping['git_repositories'][source_id] = target_repository.get('id')
                 break
     
-    """     # Step 3: For each mapped repository, handle commits, branches, and PRs
-    for source_repo_id, target_repo_id in mapping['git_repositories'].items():
-        # Map commits by hash
-        source_commits = get_git_commits(source_organization, source_project, source_auth_header, source_repo_id)
-        target_commits = get_git_commits(target_organization, target_project, target_auth_header, target_repo_id)
+    # Step 3: For each mapped repository, maps commits, branches, and pull requests.
+    for source_repository_id, target_repository_id in mapping['git_repositories'].items():
+        # Step 3.1: Maps commits by their hash value.
+        source_commits = get_git_commits(source_organization, source_project, source_authentication_header, source_repository_id)
+        target_commits = get_git_commits(target_organization, target_project, target_authentication_header, target_repository_id)
         
         for source_commit in source_commits:
             source_hash = source_commit.get('commitId')
@@ -566,7 +566,7 @@ def map_objects(source_organization, source_project, source_authentication_heade
                 if source_hash == target_hash:
                     mapping['git_commits'][source_hash] = target_hash
                     break
-        
+        """
         # Map branches by name
         source_branches = get_git_branches(source_organization, source_project, source_auth_header, source_repo_id)
         target_branches = get_git_branches(target_organization, target_project, target_auth_header, target_repo_id)

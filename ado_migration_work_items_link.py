@@ -476,6 +476,127 @@ def extract_work_item_references(work_items):
     
     return work_item_to_codebase
 
+def map_objects(source_organization, source_project, source_authentication_header,
+                              target_organization, target_project, target_authentication_header):
+    """
+    Builds comprehensive mapping between source and target objects.
+    """
+    mapping = {
+        'work_items': {},
+        'git_repositories': {},
+        'git_commits': {},
+        'git_branches': {},
+        'git_pullrequests': {},
+        'tfvc_changesets': {}
+    }
+    
+    # Step 1: Maps work items by their title and type.
+    work_item_mapping = build_work_item_mapping(
+        source_organization, source_project, source_auth_header,
+        target_organization, target_project, target_auth_header
+    )
+
+    mapping['work_items'] = work_item_mapping['work_items']
+    
+    # Step 2: Map Git repositories by name
+    source_repos = get_git_repositories(source_organization, source_project, source_auth_header)
+    target_repos = get_git_repositories(target_organization, target_project, target_auth_header)
+    
+    for source_repo in source_repos:
+        source_id = source_repo.get('id')
+        source_name = source_repo.get('name')
+        
+        for target_repo in target_repos:
+            if target_repo.get('name') == source_name:
+                mapping['git_repositories'][source_id] = target_repo.get('id')
+                break
+    
+    # Step 3: For each mapped repository, handle commits, branches, and PRs
+    for source_repo_id, target_repo_id in mapping['git_repositories'].items():
+        # Map commits by hash
+        source_commits = get_git_commits(source_organization, source_project, source_auth_header, source_repo_id)
+        target_commits = get_git_commits(target_organization, target_project, target_auth_header, target_repo_id)
+        
+        for source_commit in source_commits:
+            source_hash = source_commit.get('commitId')
+            for target_commit in target_commits:
+                target_hash = target_commit.get('commitId')
+                if source_hash == target_hash:
+                    mapping['git_commits'][source_hash] = target_hash
+                    break
+        
+        # Map branches by name
+        source_branches = get_git_branches(source_organization, source_project, source_auth_header, source_repo_id)
+        target_branches = get_git_branches(target_organization, target_project, target_auth_header, target_repo_id)
+        
+        for source_branch in source_branches:
+            source_name = source_branch.get('name', '').replace('refs/heads/', '')
+            source_id = source_branch.get('objectId')
+            
+            for target_branch in target_branches:
+                target_name = target_branch.get('name', '').replace('refs/heads/', '')
+                target_id = target_branch.get('objectId')
+                
+                if source_name == target_name:
+                    mapping['git_branches'][source_id] = target_id
+                    break
+        
+        # Map PRs using enhanced approach
+        source_prs = get_git_pullrequests(source_organization, source_project, source_auth_header, source_repo_id)
+        target_prs = get_git_pullrequests(target_organization, target_project, target_auth_header, target_repo_id)
+        
+        pr_mapping = map_pull_requests_with_work_items(source_prs, target_prs, mapping['work_items'])
+        mapping['git_pullrequests'].update(pr_mapping)
+    
+    return mapping
+
+def map_work_items(source_organization, source_project, source_authentication_header,
+                          target_organization, target_project, target_authentication_header):
+    """
+    This function maps work items between source and target environments using title and type.
+    """
+    work_items_mapping = {'work_items': {}}
+    
+    print("[INFO] Mapping work items...")
+    
+    source_work_items = get_work_items(source_organization, source_project, source_authentication_header)
+    target_work_items = get_work_items(target_organization, target_project, target_authentication_header)
+    
+    # Creates a lookup dictionary for faster matching.
+    target_lookup = {}
+
+    for work_item in target_work_items:
+        item_id = work_item.get('id')
+        item_title = work_item.get('fields', {}).get('System.Title', '')
+        item_type = work_item.get('fields', {}).get('System.WorkItemType', '')
+        
+        # Creates a key of type + title as the mapping is done using title and type.
+        composite_key = f"{item_type}|{item_title}"
+        target_lookup[composite_key] = item_id
+    
+    # Map source work items to target work items
+    matches = 0
+
+    for work_item in source_work_items:
+        source_id = work_item.get('id')
+        item_title = work_item.get('fields', {}).get('System.Title', '')
+        item_type = work_item.get('fields', {}).get('System.WorkItemType', '')
+        
+        composite_key = f"{item_type}|{item_title}"
+        
+        if composite_key in target_lookup:
+            target_id = target_lookup[composite_key]
+            work_items_mapping['work_items'][source_id] = target_id
+            matches += 1
+            print(f"[INFO] Mapped '{item_type}: {item_title}' ({source_id} → {target_id})")
+    
+    print(f"\n[INFO] Mapped {matches} out of {len(source_work_items)} work items.")
+    
+    return work_items_mapping
+
+
+
+
 def create_work_item_codebase_links(organization, project_name, authentication_header, work_item_codebase_mapping, id_mapping=None):
     """
     This function creates links between work items and codebase objects in the target system.
@@ -594,27 +715,20 @@ def create_work_item_codebase_links(organization, project_name, authentication_h
 
 def create_target_reference_url(link, id_mapping=None):
     """
-    Creates the target reference URL based on the source link information and ID mappings.
-    
-    Parameters:
-    - link: Dictionary containing link information (type, id, url, etc.)
-    - id_mapping: Dictionary with mappings between source and target IDs
-    
-    Returns:
-    - String with the target reference URL, or None if mapping failed
+    This function translates a source codebase object link into the corresponding reference URL in the target environment.
     """
     if not id_mapping:
-        print(f"[WARNING] No ID mapping provided for codebase objects.")
+        print(f"\033[1;31m[ERROR] No id mapping provided for codebase objects.\033[0m")
         return None
     
     link_type = link.get('type')
     link_id = link.get('id')
     
     if link_type == 'tfvc_changeset':
-        # Map TFVC changeset
         if 'tfvc_changesets' in id_mapping and link_id in id_mapping['tfvc_changesets']:
             target_changeset_id = id_mapping['tfvc_changesets'][link_id]
             return f"vstfs:///VersionControl/Changeset/{target_changeset_id}"
+        
         else:
             print(f"[WARNING] No mapping found for TFVC changeset {link_id}")
             return None
@@ -756,10 +870,14 @@ if __name__ == "__main__":
     ascii_art = pyfiglet.figlet_format("by codewizard", font="ogre")
     print(ascii_art)
 
-    work_items = get_work_items(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER)
+    #work_items = get_work_items(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER)
     #get_tfvc_changesets(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER)
     #get_git_commits(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, get_git_repo_id(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, "dmy_rpstry"))
     #get_git_pullrequests(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, get_git_repo_id(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, "dmy_rpstry"))
     #get_git_branches(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, get_git_repo_id(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, "Dumbo"))
     #codebase_objects = get_codebase_objects(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER)
     #extract_work_item_references(work_items)
+    work_items_mapping = map_work_items(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER,
+                          TARGET_ORGANIZATION, TARGET_PROJECT, TARGET_AUTHENTICATION_HEADER)
+    
+    print(f"\n{work_items_mapping}")

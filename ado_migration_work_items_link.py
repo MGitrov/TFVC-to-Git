@@ -36,7 +36,7 @@ def get_work_items(organization, project_name, authentication_header, work_item_
     api_version = "7.1"
     
     #print("##############################")
-    print(f"[INFO] Fetching work items from '{project_name}' in '{organization}'...")
+    print(f"\n[INFO] Fetching work items from '{project_name}' in '{organization}'...")
     
     try:
         if work_item_ids is not None:
@@ -124,7 +124,7 @@ def get_codebase_objects(organization, project_name, authentication_header, repo
     api_version = "7.1"
     
     print("##############################")
-    print(f"[INFO] Fetching codebase objects from '{project_name}' in '{organization}'...")
+    print(f"\n[INFO] Fetching codebase objects from '{project_name}' in '{organization}'...")
     
     # Initializes return structure.
     result = {
@@ -211,6 +211,8 @@ def get_tfvc_changesets(organization, project_name, authentication_header):
     """
     api_version = "7.1"
     url = f"{organization}/{project_name}/_apis/tfvc/changesets?api-version={api_version}"
+
+    print(f"\n[INFO] Fetching TFVC changesets from '{project_name}' in '{organization}'...")
     
     try:
         response = requests.get(url, headers=authentication_header)
@@ -243,7 +245,7 @@ def get_git_repositories(organization, project_name, authentication_header):
     api_version = "7.1"
     url = f"{organization}/{project_name}/_apis/git/repositories?api-version={api_version}"
     
-    print(f"[INFO] Fetching Git repositories from '{project_name}' in '{organization}'...")
+    print(f"\n[INFO] Fetching Git repositories from '{project_name}' in '{organization}'...")
     
     try:
         response = requests.get(url, headers=authentication_header)
@@ -280,6 +282,8 @@ def get_git_commits(organization, project_name, authentication_header, repositor
     """
     api_version = "7.1"
     url = f"{organization}/{project_name}/_apis/git/repositories/{repository_id}/commits?api-version={api_version}"
+
+    print(f"\n[INFO] Fetching Git commits from repository id '{repository_id}'...")
     
     try:
         response = requests.get(url, headers=authentication_header)
@@ -313,6 +317,8 @@ def get_git_pullrequests(organization, project_name, authentication_header, repo
     api_version = "7.1"
     url = f"{organization}/{project_name}/_apis/git/repositories/{repository_id}/pullrequests?api-version={api_version}&searchCriteria.status=all"
 
+    print(f"\n[INFO] Fetching Git pull requests from repository id '{repository_id}'...")
+
     try:
         response = requests.get(url, headers=authentication_header)
         print(f"[DEBUG] Request's Status Code: {response.status_code}")
@@ -344,6 +350,8 @@ def get_git_branches(organization, project_name, authentication_header, reposito
     """
     api_version = "7.1"
     url = f"{organization}/{project_name}/_apis/git/repositories/{repository_id}/refs?api-version={api_version}"
+
+    print(f"\n[INFO] Fetching Git branches from repository id '{repository_id}'...")
     
     try:
         response = requests.get(url, headers=authentication_header)
@@ -555,7 +563,7 @@ def map_objects(source_organization, source_project, source_authentication_heade
     
     # Step 3: For each mapped repository, maps commits, branches, and pull requests.
     for source_repository_id, target_repository_id in mapping['git_repositories'].items():
-        # Step 3.1: Maps commits by their hash value.
+        # Step 3.1: Maps Git commits by their hash value.
         source_commits = get_git_commits(source_organization, source_project, source_authentication_header, source_repository_id)
         target_commits = get_git_commits(target_organization, target_project, target_authentication_header, target_repository_id)
         
@@ -566,10 +574,10 @@ def map_objects(source_organization, source_project, source_authentication_heade
                 if source_hash == target_hash:
                     mapping['git_commits'][source_hash] = target_hash
                     break
-        """
-        # Map branches by name
-        source_branches = get_git_branches(source_organization, source_project, source_auth_header, source_repo_id)
-        target_branches = get_git_branches(target_organization, target_project, target_auth_header, target_repo_id)
+        
+        # Step 3.2: Maps Git branches by their name.
+        source_branches = get_git_branches(source_organization, source_project, source_authentication_header, source_repository_id)
+        target_branches = get_git_branches(target_organization, target_project, target_authentication_header, target_repository_id)
         
         for source_branch in source_branches:
             source_name = source_branch.get('name', '').replace('refs/heads/', '')
@@ -586,7 +594,7 @@ def map_objects(source_organization, source_project, source_authentication_heade
         # Map PRs using enhanced approach
         source_prs = get_git_pullrequests(source_organization, source_project, source_auth_header, source_repo_id)
         target_prs = get_git_pullrequests(target_organization, target_project, target_auth_header, target_repo_id)
-        
+        """
         pr_mapping = map_pull_requests_with_work_items(source_prs, target_prs, mapping['work_items'])
         mapping['git_pullrequests'].update(pr_mapping) """
     

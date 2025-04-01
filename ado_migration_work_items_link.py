@@ -1,7 +1,7 @@
 import os
 import requests
 import base64
-
+import re
 
 from dotenv import load_dotenv
 
@@ -330,6 +330,151 @@ def get_git_branches(organization, project_name, authentication_header, reposito
         print(f"\033[1;31m[ERROR] An error occurred while fetching Git branches: {e}\033[0m")
         return []
 
+def extract_work_item_references(work_items):
+    """
+    This function extracts all links between work items and codebase objects.
+    
+    Codebase objects handled by this function are:
+    • Changesets (for TFVC).
+    • Commits (for Git).
+    • Pull Requests (for Git).
+    • Branches (for Git).
+    
+    Returns:
+    • Dictionary mapping work item IDs to linked codebase objects:
+      {
+        '123': [
+          {'type': 'git_commit', 'url': 'vstfs:///Git/Commit/...', 'name': 'Fixed in Commit'},
+          {'type': 'tfvc_changeset', 'url': 'vstfs:///VersionControl/Changeset/42', 'name': 'Fixed in Changeset'}
+        ],
+        ...
+      }
+    """
+    print("##############################")
+    print("[INFO] Extracting links between work items and codebase objects...")
+    
+    # Mapping dictionary.
+    work_item_to_codebase = {}
+    
+    # URL patterns for identifying codebase object types.
+    patterns = {
+        'git_commit': r'vstfs:///Git/Commit/',
+        'git_pullrequest': r'vstfs:///Git/PullRequestId/',
+        'git_branch': r'vstfs:///Git/Ref/',
+        'tfvc_changeset': r'vstfs:///VersionControl/Changeset/'
+    }
+
+    total_work_items = len(work_items)
+    total_work_items_with_links = 0
+    total_links = 0
+
+    link_types_count = {key: 0 for key in patterns.keys()}
+    link_names_count = {}
+    
+    for work_item in work_items:
+        work_item_id = work_item.get('id')
+
+        if not work_item_id:
+            continue
+        
+        # Fetches work item type and title for enhanced logging.
+        work_item_type = work_item.get('fields', {}).get('System.WorkItemType', 'Unknown')
+        work_item_title = work_item.get('fields', {}).get('System.Title', 'Untitled')
+
+        # The links between work items and codebase objects are stored in the work item's 'relations' array.
+        relations = work_item.get('relations', [])
+        
+        # Filters for 'ArtifactLink' relations. By filtering for 'ArtifactLink' relations, it is specifically targeting the links between work items and codebase objects. 
+        # Without filtering, other types of links (like parent-child relationships between work items) would be processed which are not relevant.
+        artifact_links = [rel for rel in relations if rel.get('rel') == 'ArtifactLink']
+        
+        if not artifact_links:
+            continue
+        
+        # Creates an entry for the current processed work item.
+        work_item_to_codebase[work_item_id] = []
+        work_item_link_count = 0
+        
+        for link in artifact_links:
+            link_url = link.get('url', '')
+            link_attributes = link.get('attributes', {})
+            link_name = link_attributes.get('name', '')
+            
+            # Skips if not a codebase object link.
+            if not link_name or not any(re.search(pattern, link_url) for pattern in patterns.values()):
+                continue
+            
+            codebase_type = None
+
+            # Checks the link URL against the predefined patterns to determine the type of codebase object.
+            for type_key, pattern in patterns.items():
+                if re.search(pattern, link_url):
+                    codebase_type = type_key
+                    break
+            
+            if codebase_type:
+                id_match = None
+
+                if codebase_type == 'tfvc_changeset':
+                    id_match = re.search(r'vstfs:///VersionControl/Changeset/(\d+)', link_url) # Extracts changeset id.
+
+                elif codebase_type == 'git_pullrequest':
+                    id_match = re.search(r'vstfs:///Git/PullRequestId/.*?%2F(\d+)', link_url) # Extracts pull request id.
+
+                elif codebase_type == 'git_commit':
+                    id_match = re.search(r'([0-9a-f]{40})$', link_url) # Extracts the commit hash.
+
+                elif codebase_type == 'git_branch':
+                    id_match = re.search(r'GB(.+)$', link_url) # Extracts the branch name after the "GB" prefix.
+                
+                # Creates link object with all available metadata.
+                link_object = {
+                    'type': codebase_type,
+                    'url': link_url,
+                    'name': link_name,
+                    'created_date': link_attributes.get('resourceCreatedDate'),
+                    'modified_date': link_attributes.get('resourceModifiedDate'),
+                    'authorized_date': link_attributes.get('authorizedDate'),
+                    'link_id': link_attributes.get('id')
+                }
+                
+                if id_match:
+                    link_object['id'] = id_match.group(1)
+                
+                repository_match = re.search(r'%2F([0-9a-f-]+)%2F', link_url)
+
+                if repository_match:
+                    link_object['repository_id'] = repository_match.group(1)
+                
+                # Assigns the link to the current processed work item.
+                work_item_to_codebase[work_item_id].append(link_object)
+                
+                total_links += 1
+                work_item_link_count += 1
+                link_types_count[codebase_type] += 1
+                link_names_count[link_name] = link_names_count.get(link_name, 0) + 1
+                
+                print(f"\n[INFO] Work item {work_item_id} ({work_item_type}: {work_item_title}) → Link: {link_name}")
+        
+        if work_item_link_count > 0:
+            total_work_items_with_links += 1
+            print(f"[INFO] Found {work_item_link_count} link(s) to codebase objects for work item {work_item_id}")
+    
+    # Removes work items with no links to codebase objects.
+    work_item_to_codebase = {k: v for k, v in work_item_to_codebase.items() if v}
+    
+    print(f"\n• Total work items processed: {total_work_items}")
+    print(f"• Work items with links to codebase objects: {total_work_items_with_links} ({(total_work_items_with_links/total_work_items*100):.2f}% of total work items)")
+    print(f"• Total links to codebase objects found: {total_links}")
+    
+    print("\nBreakdown by codebase object type:")
+    print("-"*30)
+    for link_type, count in link_types_count.items():
+        if count > 0:
+            print(f"  {link_type}: {count} ({(count/total_links*100):.2f}% of total codebase objects)")
+    
+    return work_item_to_codebase
+
 def get_git_repo_id(organization, project, authentication_header, repository_name): # HELPER.
     """
     Retrieves the repository ID of a Git repository in Azure DevOps.
@@ -356,9 +501,10 @@ if __name__ == "__main__":
     ascii_art = pyfiglet.figlet_format("by codewizard", font="ogre")
     print(ascii_art)
 
-    #get_work_items(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER)
+    work_items = get_work_items(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER)
     #get_tfvc_changesets(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER)
     #get_git_commits(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, get_git_repo_id(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, "dmy_rpstry"))
     #get_git_pullrequests(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, get_git_repo_id(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, "dmy_rpstry"))
     #get_git_branches(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, get_git_repo_id(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, "Dumbo"))
-    get_codebase_objects(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER)
+    #codebase_objects = get_codebase_objects(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER)
+    extract_work_item_references(work_items)

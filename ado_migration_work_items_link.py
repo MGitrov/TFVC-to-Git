@@ -574,9 +574,9 @@ def map_work_items(source_organization, source_project, source_authentication_he
         composite_key = f"{item_type}|{item_title}"
         target_lookup[composite_key] = item_id
     
-    # Map source work items to target work items
     matches = 0
 
+    # Maps source work items to target work items.
     for work_item in source_work_items:
         source_id = work_item.get('id')
         item_title = work_item.get('fields', {}).get('System.Title', '')

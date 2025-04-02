@@ -36,17 +36,17 @@ def get_project_id(organization, project_name, authentication_header):
     api_version = "7.1"
     url = f"{organization}/_apis/projects/{project_name}?api-version={api_version}"
 
-    print("##############################")
-    print(f"[INFO] Fetching the ID of '{project_name}' project from '{organization}'...")
-    print(f"[DEBUG] API URL: {url}")
+    #print("##############################")
+    #print(f"[INFO] Fetching the ID of '{project_name}' project from '{organization}'...")
+    #print(f"[DEBUG] API URL: {url}")
 
     try:
         response = requests.get(url, headers=authentication_header)
-        print(f"[DEBUG] Request's Status Code: {response.status_code}")
+        #print(f"[DEBUG] Request's Status Code: {response.status_code}")
 
         if response.status_code == 200:
             project_id = response.json()["id"]
-            print(f"Project: {project_name} | ID: {project_id}")
+            #print(f"Project: {project_name} | ID: {project_id}")
 
             return project_id
         
@@ -550,10 +550,10 @@ def extract_work_item_references(work_items):
     print(f"• Total links to codebase objects found: {total_links}")
     
     print("\nBreakdown by codebase object type:")
-    print("-"*30)
+    print("-"*35)
     for link_type, count in link_types_count.items():
         if count > 0:
-            print(f"  {link_type}: {count} ({(count/total_links*100):.2f}% of total codebase objects)")
+            print(f"• {link_type}: {count} ({(count/total_links*100):.2f}% of total codebase objects)")
     
     return work_item_to_codebase
 
@@ -612,14 +612,12 @@ def map_objects(source_organization, source_project, source_authentication_heade
         
         for source_branch in source_branches:
             source_name = source_branch.get('name', '').replace('refs/heads/', '')
-            source_id = source_branch.get('objectId')
             
             for target_branch in target_branches:
                 target_name = target_branch.get('name', '').replace('refs/heads/', '')
-                target_id = target_branch.get('objectId')
                 
                 if source_name == target_name:
-                    mapping['git_branches'][source_id] = target_id
+                    mapping['git_branches'][source_name] = target_name
                     break
         
         # Step 3.3: Maps Git pull requests by their title and associated work items.
@@ -647,7 +645,7 @@ def map_work_items(source_organization, source_project, source_authentication_he
     """
     work_items_mapping = {'work_items': {}}
     
-    print("[INFO] Mapping work items...")
+    print("\n[INFO] Mapping work items...")
     
     source_work_items = get_work_items(source_organization, source_project, source_authentication_header)
     target_work_items = get_work_items(target_organization, target_project, target_authentication_header)
@@ -818,22 +816,30 @@ def map_tfvc_changesets(source_organization, source_project, source_authenticati
 
     return tfvc_changesets_mapping
 
-def link_work_items(target_organization, target_project, target_authentication_header, work_items_links, objects_mapping):
+def link_work_items(target_organization, target_project, target_authentication_header):
     """
     This function replicates links between work items and codebase objects from source environment to target environment.
     """
+    os.system('cls' if os.name == 'nt' else 'clear')
+    ascii_art = pyfiglet.figlet_format("by codewizard", font="ogre")
+    print(ascii_art)
+
     print("\n" + "\033[1m=\033[0m" * 100)
     print("\033[1mSTARTING WORK ITEMS-CODEBASE OBJECTS LINKS RECREATION PROCESS\033[0m")
     print("\033[1m=\033[0m" * 100)
-    
+
     results = {
         'success': 0,
         'failed': 0,
         'skipped': 0,
         'details': {}
     }
-    
-    # Prepare mapping dictionaries
+
+    source_work_items = get_work_items(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER)
+    work_items_links = extract_work_item_references(source_work_items)
+    objects_mapping = map_objects(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER,
+                                  TARGET_ORGANIZATION, TARGET_PROJECT, TARGET_AUTHENTICATION_HEADER)
+
     work_item_id_map = {}
 
     if objects_mapping and 'work_items' in objects_mapping:
@@ -847,42 +853,37 @@ def link_work_items(target_organization, target_project, target_authentication_h
         ...
       }'''
 
-    # Process each work item and its codebase links
     for source_work_item_id, codebase_links in work_items_links.items():
         target_work_item_id = work_item_id_map.get(int(source_work_item_id)) # Translates the source work item ID to the target work item ID.
         
         if not target_work_item_id:
-            print(f"[WARNING] No target ID mapping found for work item {source_work_item_id}. Skipping...")
+            print(f"\033[1;38;5;214m[WARNING] No target ID mapping found for work item {source_work_item_id}. Skipping...\033[0m")
             results['skipped'] += len(codebase_links)
             continue
+
+        print("\n" + "\033[1m-\033[0m" * 50)
+        print(f"[INFO] Recreating links for the following mapped work items: {source_work_item_id} → {target_work_item_id}")
         
-        print(f"[INFO] Processing links for work item {source_work_item_id} → {target_work_item_id}")
-        
-        # Track results for this work item
-        item_results = {
+        work_item_results = {
             'success': 0,
             'failed': 0,
             'skipped': 0,
             'links': []
         }
         
-        # Process each codebase link
         for link in codebase_links:
-            print(f"\n{link}\n")
-            print(f"\n{objects_mapping}\n")
             link_type = link.get('type')
             link_name = link.get('name')
-            source_url = link.get('url')
+            source_link_url = link.get('url')
             
-            # Map the codebase reference to target system
             target_reference = create_target_reference_url(link, objects_mapping)
             
             if not target_reference:
-                print(f"[WARNING] Could not map codebase reference for {link_type}. Skipping...")
-                item_results['skipped'] += 1
+                print(f"\033[1;38;5;214m[WARNING] Could not create target reference url for '{link_type}' link type. Skipping...\033[0m")
+                work_item_results['skipped'] += 1
                 continue
             
-            # Create the link in the target system
+            # Creates the link in the target environment.
             success, message = create_link(
                 target_organization, 
                 target_project, 
@@ -891,42 +892,42 @@ def link_work_items(target_organization, target_project, target_authentication_h
                 target_reference,
                 link_name
             )
-            
-            # Track the result
-            if success:
-                item_results['success'] += 1
-                print(f"[INFO] Successfully created {link_type} link for work item {target_work_item_id}")
+
+            # Checks whether the target link already configured for the current processed work item.
+            if message == "Link already exists": 
+                work_item_results['skipped'] += 1
+                print(f"\n\033[1;33m[INFO] There is already a '{link_type}' link for work item {target_work_item_id}. Skipping...\033[0m")
+
+            elif success:
+                work_item_results['success'] += 1
+                print(f"\n\033[1;32m[SUCCESS] Successfully created '{link_type}' link for work item {target_work_item_id}.\033[0m")
+
             else:
-                item_results['failed'] += 1
-                print(f"[ERROR] Failed to create {link_type} link for work item {target_work_item_id}: {message}")
+                work_item_results['failed'] += 1
+                print(f"\n\033[1;31m[ERROR] Failed to create '{link_type}' link for work item {target_work_item_id}: {message}.\033[0m")
             
-            # Record details
-            item_results['links'].append({
+            work_item_results['links'].append({
                 'type': link_type,
                 'name': link_name,
-                'source_url': source_url,
+                'source_url': source_link_url,
                 'target_reference': target_reference,
                 'success': success,
                 'message': message
             })
         
-        # Update overall results
-        results['success'] += item_results['success']
-        results['failed'] += item_results['failed']
-        results['skipped'] += item_results['skipped']
-        results['details'][target_work_item_id] = item_results
-        
-        # Log summary for this work item
-        print(f"[INFO] Work item {target_work_item_id} link creation summary: "
-              f"{item_results['success']} successful, "
-              f"{item_results['failed']} failed, "
-              f"{item_results['skipped']} skipped")
+        # Updates overall results.
+        results['success'] += work_item_results['success']
+        results['failed'] += work_item_results['failed']
+        results['skipped'] += work_item_results['skipped']
+        results['details'][target_work_item_id] = work_item_results
     
-    # Log overall summary
-    print(f"[INFO] Overall link creation summary: "
-          f"{results['success']} successful, "
-          f"{results['failed']} failed, "
-          f"{results['skipped']} skipped")
+    print("\n" + "\033[1m=\033[0m" * 100)
+    print("\033[1mLINK RECREATION SUMMARY\033[0m")
+    print("\033[1m=\033[0m" * 100)
+    
+    print(f"• Total links successfully recreated: {results['success']}")
+    print(f"• Total links failed to be recreated: {results['failed']}")
+    print(f"• Total links skipped: {results['skipped']}")
     
     return results
 
@@ -978,7 +979,7 @@ def create_target_reference_url(link, id_mapping):
             target_repo_id = id_mapping.get('git_repositories', {}).get(source_repo_id)
             
             if target_repo_id and target_pr_id:
-                return f"vstfs:///Git/PullRequestId/{target_repo_id}%2F{target_pr_id}"
+                return f"vstfs:///Git/PullRequestId/{project_id}%2F{target_repo_id}%2F{target_pr_id}"
             
             else:
                 print(f"\033[1;38;5;214m[WARNING] No target repository found for Git pull request '{link_id}'.\033[0m")
@@ -1001,7 +1002,7 @@ def create_target_reference_url(link, id_mapping):
             target_repo_id = id_mapping.get('git_repositories', {}).get(source_repo_id)
             
             if target_repo_id and target_branch:
-                return f"vstfs:///Git/Ref/{target_repo_id}%2FGB{target_branch}"
+                return f"vstfs:///Git/Ref/{project_id}%2F{target_repo_id}%2FGB{target_branch}"
             
             else:
                 print(f"\033[1;38;5;214m[WARNING] No target repository found for Git branch '{link_id}'.\033[0m")
@@ -1023,10 +1024,10 @@ def create_target_reference_url(link, id_mapping):
     else:
         print(f"\n\033[1;38;5;214m[WARNING] '{link_type}' is an unsupported link type.\033[0m")
         print(f"[INFO] Supported link types are:")
-        print(f"    • Commits (for Git)")
-        print(f"    • Pull Requests (for Git)")
-        print(f"    • Branches (for Git)")
-        print(f"    • Changesets (for TFVC)")
+        print(f" • Commits (for Git)")
+        print(f" • Pull Requests (for Git)")
+        print(f" • Branches (for Git)")
+        print(f" • Changesets (for TFVC)")
         return None
 
 def create_link(organization, project_name, authentication_header, work_item_id, reference_url, link_name):
@@ -1037,6 +1038,28 @@ def create_link(organization, project_name, authentication_header, work_item_id,
     • Tuple (success\fail, message)
     """
     api_version = "7.1"
+    check_url = f"{organization}/{project_name}/_apis/wit/workitems/{work_item_id}?api-version={api_version}&$expand=relations"
+    
+    try:
+        check_response = requests.get(check_url, headers=authentication_header)
+        
+        if check_response.status_code == 200:
+            work_item = check_response.json()
+            relations = work_item.get('relations', [])
+            
+            # Check if this exact link already exists
+            for relation in relations:
+                if (relation.get('rel') == 'ArtifactLink' and 
+                    relation.get('url') == reference_url and 
+                    relation.get('attributes', {}).get('name') == link_name):
+                    return "skipped", "Link already exists"
+        else:
+            print(f"[WARNING] Could not check existing links: {check_response.status_code}")
+            # Continue with creation attempt even if we couldn't check
+    except Exception as e:
+        print(f"[WARNING] Error checking existing links: {str(e)}")
+        # Continue with creation attempt even if we couldn't check
+
     url = f"{organization}/{project_name}/_apis/wit/workitems/{work_item_id}?api-version={api_version}"
     
     payload = [
@@ -1065,53 +1088,10 @@ def create_link(organization, project_name, authentication_header, work_item_id,
             return True, "[SUCCESS] Link created successfully"
         
         else:
-            return False, f"[ERROR] {response.status_code}: {response.text}"
+            return False, f"{response.status_code}: {response.text}"
             
     except requests.exceptions.RequestException as e:
-        return False, f"[ERROR]: {str(e)}"
-
-def get_git_repo_id(organization, project, authentication_header, repository_name): # HELPER.
-    """
-    Retrieves the repository ID of a Git repository in Azure DevOps.
-
-    :param organization: Azure DevOps organization name
-    :param project: Azure DevOps project name
-    :param repository: Name of the Git repository
-    :param pat: Personal Access Token (PAT) for authentication
-    :return: Repository ID (string) if found, otherwise None
-    """
-    url = f"{organization}/{project}/_apis/git/repositories/{repository_name}?api-version=7.1-preview.1"
-    
-    # Use Basic Authentication with PAT (username is empty)
-    response = requests.get(url, headers=authentication_header)
-    
-    if response.status_code == 200:
-        repo_data = response.json()
-        return repo_data.get("id")
-    else:
-        print(f"Error: {response.status_code} - {response.text}")
-        return None
+        return False, f"{str(e)}"
 
 if __name__ == "__main__":
-    os.system('cls' if os.name == 'nt' else 'clear')
-    ascii_art = pyfiglet.figlet_format("by codewizard", font="ogre")
-    print(ascii_art)
-
-    #target_work_items = get_work_items(TARGET_ORGANIZATION, TARGET_PROJECT, TARGET_AUTHENTICATION_HEADER)
-    source_work_items = get_work_items(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER)
-    #get_tfvc_changesets(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER)
-    #get_git_commits(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, get_git_repo_id(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, "dmy_rpstry"))
-    #get_git_pullrequests(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, get_git_repo_id(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, "dmy_rpstry"))
-    #get_git_branches(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, get_git_repo_id(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, "Dumbo"))
-    #codebase_objects = get_codebase_objects(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER)
-    work_items_refs = extract_work_item_references(source_work_items)
-
-    mapping = map_objects(
-        SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER,
-        TARGET_ORGANIZATION, TARGET_PROJECT, TARGET_AUTHENTICATION_HEADER
-    )
-
-    link_work_items(TARGET_ORGANIZATION, TARGET_PROJECT, TARGET_AUTHENTICATION_HEADER, work_items_refs, mapping)
-
-    # Source: 'vstfs:///Git/Commit/462c3573-8a19-42e7-9165-87e99091bcc9%2Fd085fadf-9718-4d8c-8d3c-da4573763f72%2Fe55922615c66c4ec4a853e67e1327eed37e93c2e'
-    # Target: 'vstfs:///Git/Commit/681f7e98-32f1-4e9c-9ccd-db9ef45622ee%2Fe55922615c66c4ec4a853e67e1327eed37e93c2e'
+    link_work_items(TARGET_ORGANIZATION, TARGET_PROJECT, TARGET_AUTHENTICATION_HEADER)

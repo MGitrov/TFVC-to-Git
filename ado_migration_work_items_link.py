@@ -591,12 +591,21 @@ def map_objects(source_organization, source_project, source_authentication_heade
                     mapping['git_branches'][source_id] = target_id
                     break
         
-        # Map PRs using enhanced approach
-        source_prs = get_git_pullrequests(source_organization, source_project, source_auth_header, source_repo_id)
-        target_prs = get_git_pullrequests(target_organization, target_project, target_auth_header, target_repo_id)
-        """
-        pr_mapping = map_pull_requests_with_work_items(source_prs, target_prs, mapping['work_items'])
-        mapping['git_pullrequests'].update(pr_mapping) """
+        # Step 3.3: Maps Git pull requests by their title and associated work items.
+        source_prs = get_git_pullrequests(source_organization, source_project, source_authentication_header, source_repository_id)
+        target_prs = get_git_pullrequests(target_organization, target_project, target_authentication_header, target_repository_id)
+        '''
+        pr_mapping = map_pull_requests(source_prs, target_prs, mapping['work_items'])
+        mapping['git_pullrequests'].update(pr_mapping)
+        '''
+
+    # Step 4: Maps TFVC changesets by their ID.
+    tfvc_changesets_mapping = map_tfvc_changesets(
+        source_organization, source_project, source_authentication_header,
+        target_organization, target_project, target_authentication_header
+    )
+
+    mapping['tfvc_changesets'].update(tfvc_changesets_mapping)
     
     return mapping
 
@@ -644,8 +653,139 @@ def map_work_items(source_organization, source_project, source_authentication_he
     
     return work_items_mapping
 
+def map_pull_requests(source_prs, target_prs, work_item_mapping):
+    """
+    This function maps pull requests between source and target environments using title and associated work items.
 
+    First Pass: Title-Based Matching
+        For each source pull request:
+            • The function extracts its id and title.
+            • The function checks for target pull request(s) with exactly the same title.
+            • There are three possible outcomes:
+                1. No matches: The pull request cannot be mapped.
+                2. One match: The pull request has a unique, reliable mapping.
+                3. Multiple matches: The pull request has multiple potential mappings, requiring further investigation.
 
+        If there is exactly one match by title, it is immediately mapped since it is likely correct.
+        If there are multiple target pull requests with the same title, they are stored them "potential matches" for the second pass.
+
+    Second Pass: Work Item-Based Matching
+        For each ambiguous source pull request:
+            • The function retrieves its associated work items.
+            • The function checks for target pull request(s) with the same associated work items.
+            • The function selects the target pull request with the most matching work items.
+
+        If there is a clear winner with the highest match score, that mapping is created.
+    """
+    pr_mapping = {}
+    
+    # First pass: Maps by pull request's title.
+    title_matches = {}
+
+    for source_pr in source_prs:
+        source_id = source_pr.get('pullRequestId')
+        source_title = source_pr.get('title', '')
+        
+        matches = []
+
+        for target_pr in target_prs:
+            target_id = target_pr.get('pullRequestId')
+            target_title = target_pr.get('title', '')
+            
+            if source_title == target_title:
+                matches.append(target_id)
+        
+        # Checks for a unique match.
+        if len(matches) == 1:
+            pr_mapping[source_id] = matches[0]
+
+        elif len(matches) > 1:
+            title_matches[source_id] = matches
+    
+    # Second pass: Uses associated work items to resolve ambiguities.
+    for source_id, potential_targets in title_matches.items():
+        source_pr = next((pr for pr in source_prs if pr.get('pullRequestId') == source_id), None)
+
+        if not source_pr:
+            continue
+        
+        # Get associated work items for source PR
+        source_work_items = get_work_items_for_pr(source_id)
+        source_mapped_work_items = set()
+        
+        for work_item_id in source_work_items:
+            if work_item_id in work_item_mapping:
+                source_mapped_work_items.add(work_item_mapping[work_item_id])
+        
+        # Find best match among potential targets
+        best_match = None
+        best_match_score = 0
+        
+        for target_id in potential_targets:
+            target_work_items = get_work_items_for_pr(target_id)
+            match_score = len(source_mapped_work_items.intersection(target_work_items))
+            
+            if match_score > best_match_score:
+                best_match = target_id
+                best_match_score = match_score
+        
+        if best_match:
+            pr_mapping[source_id] = best_match
+    
+    return pr_mapping
+
+def map_tfvc_changesets(source_organization, source_project, source_authentication_header,
+                               target_organization, target_project, target_authentication_header):
+    """
+    This function maps TFVC changesets between source and target environments by examining changeset's comment.
+    """
+    tfvc_changesets_mapping = {}
+    multiple_mappings_count = 0
+    
+    print("[INFO] Mapping TFVC changesets...")
+    
+    source_changesets = get_tfvc_changesets(source_organization, source_project, source_authentication_header)
+    target_changesets = get_tfvc_changesets(target_organization, target_project, target_authentication_header)
+    
+    # regex patterns to extract source changeset IDs from target comments.
+    patterns = [
+        r"Migrated from changeset no\. (\d+)",
+        r"Migrated changeset no\. (\d+)"
+    ]
+    
+    # Compiles the regex patterns for improved and efficient performance.
+    compiled_patterns = [re.compile(pattern, re.IGNORECASE) for pattern in patterns]
+    
+    # Sorts the list of target changesets by their changeset ID to ensure they're processed in chronological order from oldest to newest.
+    sorted_target_changesets = sorted(target_changesets, key=lambda cs: cs.get('changesetId', 0))
+    
+    for target_cs in sorted_target_changesets:
+        target_id = target_cs.get('changesetId')
+        target_comment = target_cs.get('comment', '')
+        
+        for pattern in compiled_patterns:
+            match = pattern.search(target_comment)
+
+            if match:
+                source_id = int(match.group(1))
+                
+                # Because of a possible case(s) of multiple mappings, the function checks if the source ID is already mapped to a target ID.
+                # If it is, it will map the source ID to the most recent target ID.
+                if source_id in tfvc_changesets_mapping:
+                    multiple_mappings_count += 1
+                    print(f"[INFO] Source changeset {source_id} is currently mapped to target changeset {tfvc_changesets_mapping[source_id]}, "
+                          f"but will be remapped to a more recent target changeset {target_id}.")
+                
+                tfvc_changesets_mapping[source_id] = target_id
+                break
+    
+    total_source = len(source_changesets)
+    total_mapped = len(tfvc_changesets_mapping)
+    
+    print(f"\n[INFO] Mapped {total_mapped} out of {total_source} TFVC changesets.")
+    print(f"[INFO] {multiple_mappings_count} source TFVC changeset(s) had multiple target mappings (used most recent).")
+
+    return tfvc_changesets_mapping
 
 def create_work_item_codebase_links(organization, project_name, authentication_header, work_item_codebase_mapping, id_mapping=None):
     """
@@ -917,6 +1057,7 @@ def get_git_repo_id(organization, project, authentication_header, repository_nam
         return None
 
 if __name__ == "__main__":
+    os.system('cls' if os.name == 'nt' else 'clear')
     ascii_art = pyfiglet.figlet_format("by codewizard", font="ogre")
     print(ascii_art)
 

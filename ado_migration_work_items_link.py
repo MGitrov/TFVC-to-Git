@@ -29,6 +29,37 @@ TARGET_AUTHENTICATION_HEADER = {
     "Authorization": f"Basic {base64.b64encode(f':{TARGET_PAT}'.encode()).decode()}"
 }
 
+def get_project_id(organization, project_name, authentication_header):
+    '''
+    This function fetches the id of a project.
+    '''
+    api_version = "7.1"
+    url = f"{organization}/_apis/projects/{project_name}?api-version={api_version}"
+
+    print("##############################")
+    print(f"[INFO] Fetching the ID of '{project_name}' project from '{organization}'...")
+    print(f"[DEBUG] API URL: {url}")
+
+    try:
+        response = requests.get(url, headers=authentication_header)
+        print(f"[DEBUG] Request's Status Code: {response.status_code}")
+
+        if response.status_code == 200:
+            project_id = response.json()["id"]
+            print(f"Project: {project_name} | ID: {project_id}")
+
+            return project_id
+        
+        else:
+            print(f"\033[1;31m[ERROR] Failed to fetch project ID of '{project_name}' project.\033[0m")
+            print(f"[DEBUG] Request's Status Code: {response.status_code}")
+            print(f"[DEBUG] Response Body: {response.text}")
+            return None
+    
+    except requests.exceptions.RequestException as e:
+        print(f"\033[1;31m[ERROR] An error occurred while fetching project ID: {e}\033[0m")
+        return None
+
 def get_work_items(organization, project_name, authentication_header, work_item_ids=None):
     """
     This function fetches all work items of a project.
@@ -789,10 +820,11 @@ def map_tfvc_changesets(source_organization, source_project, source_authenticati
 
 def link_work_items(target_organization, target_project, target_authentication_header, work_items_links, objects_mapping):
     """
-    This function replicates links between work items and codebase objects from source to target environment.
+    This function replicates links between work items and codebase objects from source environment to target environment.
     """
-    print("##############################")
-    print(f"[INFO] Creating work item to codebase links in '{target_project}'...")
+    print("\n" + "\033[1m=\033[0m" * 100)
+    print("\033[1mSTARTING WORK ITEMS-CODEBASE OBJECTS LINKS RECREATION PROCESS\033[0m")
+    print("\033[1m=\033[0m" * 100)
     
     results = {
         'success': 0,
@@ -906,6 +938,7 @@ def create_target_reference_url(link, id_mapping):
         print(f"\033[1;38;5;214m[WARNING] No ID mapping provided for codebase objects.\033[0m")
         return None
     
+    project_id = get_project_id(TARGET_ORGANIZATION, TARGET_PROJECT, TARGET_AUTHENTICATION_HEADER)
     link_type = link.get('type')
     link_id = link.get('id')
     
@@ -922,7 +955,7 @@ def create_target_reference_url(link, id_mapping):
             target_repo_id = id_mapping.get('git_repositories', {}).get(source_repo_id) # Translates the source repository ID to the target repository ID.
             
             if target_repo_id and target_commit:
-                return f"vstfs:///Git/Commit/{target_repo_id}%2F{target_commit}"
+                return f"vstfs:///Git/Commit/{project_id}%2F{target_repo_id}%2F{target_commit}"
             
             else:
                 print(f"\033[1;38;5;214m[WARNING] No target repository found for Git commit '{link_id}'.\033[0m")
@@ -1064,13 +1097,14 @@ if __name__ == "__main__":
     ascii_art = pyfiglet.figlet_format("by codewizard", font="ogre")
     print(ascii_art)
 
-    work_items = get_work_items(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER)
+    #target_work_items = get_work_items(TARGET_ORGANIZATION, TARGET_PROJECT, TARGET_AUTHENTICATION_HEADER)
+    source_work_items = get_work_items(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER)
     #get_tfvc_changesets(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER)
     #get_git_commits(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, get_git_repo_id(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, "dmy_rpstry"))
     #get_git_pullrequests(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, get_git_repo_id(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, "dmy_rpstry"))
     #get_git_branches(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, get_git_repo_id(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, "Dumbo"))
     #codebase_objects = get_codebase_objects(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER)
-    work_items_refs = extract_work_item_references(work_items)
+    work_items_refs = extract_work_item_references(source_work_items)
 
     mapping = map_objects(
         SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER,
@@ -1078,3 +1112,6 @@ if __name__ == "__main__":
     )
 
     link_work_items(TARGET_ORGANIZATION, TARGET_PROJECT, TARGET_AUTHENTICATION_HEADER, work_items_refs, mapping)
+
+    # Source: 'vstfs:///Git/Commit/462c3573-8a19-42e7-9165-87e99091bcc9%2Fd085fadf-9718-4d8c-8d3c-da4573763f72%2Fe55922615c66c4ec4a853e67e1327eed37e93c2e'
+    # Target: 'vstfs:///Git/Commit/681f7e98-32f1-4e9c-9ccd-db9ef45622ee%2Fe55922615c66c4ec4a853e67e1327eed37e93c2e'

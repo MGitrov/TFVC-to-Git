@@ -304,7 +304,7 @@ def get_git_repositories(organization, project_name, authentication_header):
             return []
             
     except requests.exceptions.RequestException as e:
-        print(f"\033[1;31m[ERROR][ERROR] An error occurred while fetching Git repositories: {e}\033[0m")
+        print(f"\033[1;31m[ERROR] An error occurred while fetching Git repositories: {e}\033[0m")
         return []
 
 def get_git_commits(organization, project_name, authentication_header, repository_id):

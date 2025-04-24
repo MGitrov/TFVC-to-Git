@@ -5,11 +5,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-SOURCE_ORGANIZATION="source_organization" # Configure source organization here as the URLs in this script aren't using the whole organization URL as specified in the ".env" file.
+SOURCE_ORGANIZATION="maximpetrov2612" # Configure source organization here as the URLs in this script aren't using the whole organization URL as specified in the ".env" file.
 SOURCE_PROJECT=os.getenv("SOURCE_PROJECT")
 SOURCE_PAT = os.getenv("SOURCE_PAT")
 
-TARGET_ORGANIZATION="target_organization" # Configure target organization here as the URLs in this script aren't using the whole organization URL as specified in the ".env" file.
+TARGET_ORGANIZATION="maximpetrov1297" # Configure target organization here as the URLs in this script aren't using the whole organization URL as specified in the ".env" file.
 TARGET_PROJECT=os.getenv("TARGET_PROJECT")
 TARGET_PAT = os.getenv("TARGET_PAT")
 

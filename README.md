@@ -265,6 +265,9 @@ The ```tfvc_to_git_pipelines_variable_groups.py``` script handles the migration 
 
 :construction: **UNDER CONSTRUCTION!**
 
+:warning: **The user performing the test artifacts migration need the "Basic + Test Plans" access level in both the source Azure DevOps organization/collection and the destination Azure DevOps organization/collection.**
+
+
 ### :seven: Shared Queries Migration (must be migrated prior to dashboards)
 ![usedToolBadge](https://img.shields.io/badge/Tool-Azure%20DevOps%20Migration%20Tools-blue?style=for-the-badge&labelColor=orange)
 

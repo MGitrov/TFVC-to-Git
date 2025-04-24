@@ -5,6 +5,7 @@ import json
 from datetime import datetime, UTC
 import re
 from dotenv import load_dotenv
+import pyfiglet
 
 load_dotenv()
 
@@ -306,20 +307,72 @@ def choose_agent_pool(pools):
 
 def update_repository_section(pipeline_json_config):
     """
-    This function adjusts the 'repository' section of a build pipeline.
+    This function adjusts the 'repository' section of a build pipeline to match the target TFVC structure.
     """
-    # The TFVC path tells the build pipeline which specific file or folder in TFVC to monitor for changes.
-    original_tfvc_path = pipeline_json_config['repository'].get('defaultBranch')
-    print(f"\n\033[1mMaintaining TFVC path for the '{pipeline_json_config['name']}' pipeline: {original_tfvc_path}\033[0m")
+    original_default_branch = pipeline_json_config['repository'].get('defaultBranch')
+    original_root_path = pipeline_json_config['repository'].get('rootFolder')
     
-    # Updates only the organization-specific details of the repository.
+    print(f"\n\033[1mOriginal TFVC configuration for '{pipeline_json_config['name']}' pipeline:\033[0m")
+    print(f"• Default Branch: {original_default_branch}")
+    print(f"• Root Folder: {original_root_path}")
+    
+    # Prompts the user to enter the root TFVC path for the pipeline in the target organization.
+    target_tfvc_root_path = input(f"\nEnter the root TFVC path for the '{pipeline_json_config['name']}' pipeline in the target organization (e.g., '$/CodeWizard'): ")
+    
+    # Adjusts the root path of the default branch while preserving the rest of the path.
+    new_default_branch = original_default_branch
+
+    if original_root_path and target_tfvc_root_path and original_default_branch.startswith(original_root_path):
+        # Extracts the relative path by slicing the original default branch string.
+        relative_path = original_default_branch[len(original_root_path):]
+
+        if relative_path:
+            if relative_path.startswith('/'):
+                relative_path = relative_path[1:]  # Removes leading slash if present.
+
+            new_default_branch = f"{target_tfvc_root_path}/{relative_path}"
+
+        else:
+            new_default_branch = target_tfvc_root_path
+    
     pipeline_json_config['repository'].update({
         'name': TARGET_PROJECT,
-        'url': f"{TARGET_ORGANIZATION}/"
+        'url': f"{TARGET_ORGANIZATION}/",
+        'defaultBranch': new_default_branch,
+        'rootFolder': target_tfvc_root_path
     })
     
+    # Adjusts the 'tfvcMapping' field to point to the new TFVC path.
+    if 'properties' in pipeline_json_config['repository'] and 'tfvcMapping' in pipeline_json_config['repository']['properties']:
+        try:
+            mapping_str = pipeline_json_config['repository']['properties']['tfvcMapping']
+            mapping_json = json.loads(mapping_str)
+            
+            if target_tfvc_root_path and original_root_path:
+                for mapping in mapping_json.get('mappings', []):
+                    if 'serverPath' in mapping and mapping['serverPath'].startswith(original_root_path):
+                        # Adjusts the root path of the mapping server path while preserving the rest of the path.
+                        relative_path = mapping['serverPath'][len(original_root_path):]
+
+                        if relative_path.startswith('/'):
+                            relative_path = relative_path[1:]  # Removes leading slash if present.
+                        
+                        if relative_path:
+                            mapping['serverPath'] = f"{target_tfvc_root_path}/{relative_path}"
+
+                        else:
+                            mapping['serverPath'] = target_tfvc_root_path
+            
+            pipeline_json_config['repository']['properties']['tfvcMapping'] = json.dumps(mapping_json)
+            
+            print(f"\n[INFO] Updated TFVC mappings to use root path: {target_tfvc_root_path}")
+            print(f"[INFO] Path structure below the root has been preserved.")
+
+        except json.JSONDecodeError:
+            print(f"\n\033[1;38;5;214m[WARNING] Couldn't parse the 'tfvcMapping' field, leaving it unchanged: {mapping_str}\033[0m")
+    
     print(f"\n[INFO] In the target environment, the '{pipeline_json_config['name']}' pipeline has been configured to monitor:")
-    print(f"• TFVC Path: {pipeline_json_config['repository']['defaultBranch']}")
+    print(f"• TFVC Path: {new_default_branch}")
     
     return pipeline_json_config
 
@@ -749,6 +802,10 @@ def migrate_pipelines(source_organization, target_organization, source_project, 
     """
     This function migrates TFVC-based pipelines from a source project to a target project.
     """
+    os.system('cls' if os.name == 'nt' else 'clear')
+    ascii_art = pyfiglet.figlet_format("by codewizard", font="ogre")
+    print(ascii_art)
+
     print("\n\033[1;33mEnsure the trigger branches exist in your target environment before starting the migration.\033[0m")
     print("\033[1;33mEnsure you have configured agent pools in your target environment before starting the migration.\033[0m\n")
 

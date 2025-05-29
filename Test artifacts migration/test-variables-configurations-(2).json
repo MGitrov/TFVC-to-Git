@@ -1,0 +1,50 @@
+{
+  "Serilog": {
+    "MinimumLevel": "Debug"
+  },
+
+  "MigrationTools": {
+    "Version": "16.0",
+
+    "Endpoints": {
+      "Source": {
+        "EndpointType": "TfsTeamProjectEndpoint",
+        "Collection": "Source collection/organization URL",
+        "Project": "Source project name",
+        "Authentication": {
+          "AuthenticationMode": "AccessToken",
+          "AccessToken": "PAT"
+        }
+      },
+
+      "Target": {
+        "EndpointType": "TfsTeamProjectEndpoint",
+        "Collection": "Target collection/organization URL",
+        "Project": "Target project name",
+        "Authentication": {
+          "AuthenticationMode": "AccessToken",
+          "AccessToken": "PAT"
+        },
+        
+        "ReflectedWorkItemIdField": "Custom.ReflectedWorkItemIdField"
+      }
+    },
+
+    "Processors": [
+      {
+        "ProcessorType": "TfsTestVariablesMigrationProcessor",
+        "Enabled": true,
+        "Processor": "TestVariablesMigrationContext",
+        "SourceName": "Source",
+        "TargetName": "Target"
+      },
+
+      {
+        "ProcessorType": "TfsTestConfigurationsMigrationProcessor",
+        "Enabled": true,
+        "SourceName": "Source",
+        "TargetName": "Target"
+      }
+    ]
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "Serilog": {
+    "MinimumLevel": "Debug"
+  },
+
+  "MigrationTools": {
+    "Version": "16.0",
+
+    "Endpoints": {
+      "Source": {
+        "EndpointType": "TfsTeamProjectEndpoint",
+        "Collection": "Source collection/organization URL",
+        "Project": "Source project name",
+        "Authentication": {
+          "AuthenticationMode": "AccessToken",
+          "AccessToken": "PAT"
+        }
+      },
+
+      "Target": {
+        "EndpointType": "TfsTeamProjectEndpoint",
+        "Collection": "Target collection/organization URL",
+        "Project": "Target project name",
+        "Authentication": {
+          "AuthenticationMode": "AccessToken",
+          "AccessToken": "PAT"
+        },
+        
+        "ReflectedWorkItemIdField": "Microsoft.VSTS.Build.IntegrationBuild"
+      }
+    },
+
+    "Processors": [
+      {
+        "ProcessorType": "TfsTestPlansAndSuitesMigrationProcessor",
+        "Enabled": true,
+        "OnlyElementsWithTag": "",
+        "TestPlanQuery": null,
+        "RemoveAllLinks": false,
+        "MigrationDelay": 0,
+        "RemoveInvalidTestSuiteLinks": false,
+        "FilterCompleted": false,
+        "SourceName": "Source",
+        "TargetName": "Target"
+      }
+    ]
+  }
+}

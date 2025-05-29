@@ -1,0 +1,41 @@
+{
+  "Serilog": {
+    "MinimumLevel": "Debug"
+  },
+
+  "MigrationTools": {
+    "Version": "16.0",
+
+    "Endpoints": {
+      "Source": {
+        "EndpointType": "TfsTeamProjectEndpoint",
+        "Collection": "Source collection/organization URL",
+        "Project": "Source project name",
+        "Authentication": {
+          "AuthenticationMode": "AccessToken",
+          "AccessToken": "PAT"
+        }
+      },
+
+      "Target": {
+        "EndpointType": "TfsTeamProjectEndpoint",
+        "Collection": "Target collection/organization URL",
+        "Project": "Target project name",
+        "Authentication": {
+          "AuthenticationMode": "AccessToken",
+          "AccessToken": "PAT"
+        },
+        
+        "ReflectedWorkItemIdField": "Microsoft.VSTS.Build.IntegrationBuild"
+      }
+    },
+
+    "Processors": [
+      {
+        "ProcessorType": "TfsWorkItemMigrationProcessor",
+        "Enabled": true,
+        "WIQLQuery": "SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @TeamProject AND [System.WorkItemType] IN ('Test Case','Shared Steps','Shared Parameter') ORDER BY [System.ChangedDate] desc"
+      }
+    ]
+  }
+}

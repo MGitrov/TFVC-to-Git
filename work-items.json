@@ -1,10 +1,10 @@
 {
   "Serilog": {
-      "MinimumLevel": "Debug"
+    "MinimumLevel": "Debug"
   },
+
   "MigrationTools": {
       "Version": "16.0",
-
 
       "CommonTools": {
           "TfsTeamSettingsTool": {
@@ -21,6 +21,7 @@
                   "Filters": [],
                   "Mappings": {}
               },
+
               "ReplicateAllExistingNodes": true,
               "ShouldCreateMissingRevisionPaths": true
           },
@@ -40,8 +41,10 @@
                   "AuthenticationMode": "AccessToken",
                   "AccessToken": "PAT"
               },
+
               "ReflectedWorkItemIdField": "ReflectedWorkItemId"
           },
+
           "Target": {
               "EndpointType": "TfsTeamProjectEndpoint",
               "Collection": "Target collection/organization URL",
@@ -51,7 +54,8 @@
                   "AuthenticationMode": "AccessToken",
                   "AccessToken": "PAT"
               },
-              "ReflectedWorkItemIdField": "Custom.ReflectedWorkItemId"
+              
+              "ReflectedWorkItemIdField": "ReflectedWorkItemId"
           }
       },
 

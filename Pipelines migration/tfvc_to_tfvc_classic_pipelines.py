@@ -13,7 +13,7 @@ SOURCE_ORGANIZATION=os.getenv("SOURCE_ORGANIZATION")
 SOURCE_PROJECT= os.getenv("SOURCE_PROJECT")
 SOURCE_PAT = os.getenv("SOURCE_PAT")
 
-GAU_TARGET_ORGANIZATION= os.getenv("GAU_TARGET_ORGANIZATION") # The target organization without the 'https://dev.azure.com/' part, only the name.
+GAU_TARGET_ORGANIZATION = os.getenv("GAU_TARGET_ORGANIZATION") # The target organization without the 'https://dev.azure.com/' part, only the name.
 TARGET_ORGANIZATION= os.getenv("TARGET_ORGANIZATION")
 TARGET_PROJECT= os.getenv("TARGET_PROJECT")
 TARGET_PAT = os.getenv("TARGET_PAT")
@@ -672,15 +672,32 @@ def adjust_pipeline_config(pipeline_json_config):
     authored_by = pipeline_json_config.get("authoredBy", {})
     source_display_name = authored_by.get("displayName", "Unknown")
 
+    print(f"\n[INFO] Current pipeline author: {source_display_name}")
+
+    # System accounts that require special handling.
+    system_accounts = [
+    "Microsoft.TeamFoundation.System"
+    ]
+
     target_users = get_all_users(GAU_TARGET_ORGANIZATION, TARGET_AUTHENTICATION_HEADER)
 
     if not target_users:
         raise Exception(f"[ERROR] Unable to fetch users from {TARGET_ORGANIZATION}.")
 
-    matching_user = next((user for user in target_users if user["user"]["displayName"] == source_display_name), None) # Matches the source user to a target user by 'displayName'.
+    # Checks whether the source "authoredBy" user is a system account.
+    if source_display_name in system_accounts:
+        print(f"[INFO] Detected system account '{source_display_name}'; using first available user as pipeline author.")
+        matching_user = target_users[0]  # Falls back to the first available user.
+        print(f"[INFO] Pipeline author set to: {matching_user['user']['displayName']}")
 
-    if not matching_user:
-        raise Exception(f"[ERROR] No matching user found in the target environment for '{source_display_name}'.")
+    else:
+        matching_user = next((user for user in target_users if user["user"]["displayName"] == source_display_name), None) # Matches the source user to a target user by 'displayName'.
+        
+        if not matching_user:
+            print(f"[WARNING] No matching user found in the target environment for '{source_display_name}'.")
+            print("[INFO] Using first available user as pipeline author.")
+            matching_user = target_users[0]
+            print(f"[INFO] Pipeline author set to: {matching_user['user']['displayName']}")
 
     pipeline_json_config["authoredBy"] = {
         "displayName": matching_user["user"]["displayName"],

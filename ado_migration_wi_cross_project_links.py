@@ -703,15 +703,13 @@ def create_work_item_link(organization, authentication_header, source_work_item_
     except requests.exceptions.RequestException as e:
         return False, f"Error creating link: {str(e)}"
 
-def recreate_cross_project_links(target_organization, target_authentication_header):
+def recreate_cross_project_links():
     """
     This function recreates cross-project links between work items in an organization.
     """
     os.system('cls' if os.name == 'nt' else 'clear')
-    ascii_art = pyfiglet.figlet_format("Cross-Project", font="ogre")
+    ascii_art = pyfiglet.figlet_format("by codewizard", font="ogre")
     print(ascii_art)
-    ascii_art2 = pyfiglet.figlet_format("Work Item Links", font="ogre")
-    print(ascii_art2)
 
     print("\n" + "\033[1m=\033[0m" * 100)
     print("\033[1mSTARTING CROSS-PROJECT WORK ITEM LINKS RECREATION PROCESS\033[0m")
@@ -726,62 +724,69 @@ def recreate_cross_project_links(target_organization, target_authentication_head
         'details': {}
     }
 
-    # Step 1: Extract cross-project relations from source
+    # Step 1: Extracts cross-project relations from the source environment.
     cross_project_relations = extract_cross_project_work_item_relations(
         SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER
     )
     
     if not cross_project_relations:
-        print("\n[INFO] No cross-project work item relationships found.")
+        print(f"\n[INFO] No cross-project work item relationships found in '{SOURCE_PROJECT}' in '{SOURCE_ORGANIZATION}'.")
         return results
     
-    # Step 2: Map work items in source project
+    # Step 2: Maps work items of the source project between both environments.
     source_project_mapping = map_source_project_work_items(
         SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER,
         TARGET_ORGANIZATION, TARGET_PROJECT, TARGET_AUTHENTICATION_HEADER
     )
     
-    # Step 3: Map work items in external projects
+    # Step 3: Maps work items of the external projects between both environments.
     external_projects_mapping = map_cross_project_work_items(
         SOURCE_ORGANIZATION, SOURCE_AUTHENTICATION_HEADER,
         TARGET_ORGANIZATION, TARGET_AUTHENTICATION_HEADER,
         cross_project_relations
     )
     
-    # Step 4: Create comprehensive ID mapping for comment updates
-    all_id_mappings = {}
-    all_id_mappings.update(source_project_mapping)
-    for project_mapping in external_projects_mapping.values():
-        all_id_mappings.update(project_mapping)
-    
-    print(f"\n[INFO] Total work item ID mappings available: {len(all_id_mappings)}")
-    
-    # Step 5: Recreate the links
+    # Step 4: Recreates the links in the target environment.
     print("\n" + "\033[1m-\033[0m" * 50)
     print("[INFO] Starting cross-project link recreation...")
     
+    # Processes each source work item that has cross-project relationships.
     for source_work_item_id, relations in cross_project_relations.items():
-        # Get target work item ID for source work item
+        '''
+        {
+            '11523': [  # source_work_item_id
+                {
+                    'target_work_item_id': 11168,
+                    'target_project': 'System Requirements', 
+                    'relation_type': 'System.LinkTypes.Related'
+                }
+            ]
+        }
+        '''
+        # Gets the equivalent source work item ID in the target environment.
+        # 11523 → 4577 in the target environment.
         target_source_work_item_id = source_project_mapping.get(int(source_work_item_id))
         
         if not target_source_work_item_id:
-            print(f"\033[1;38;5;214m[WARNING] No target mapping found for source work item {source_work_item_id}. Skipping...\033[0m")
+            print(f"\033[1;38;5;214m[WARNING] No mapping found in the target environment for source work item {source_work_item_id}. Skipping...\033[0m")
             results['skipped'] += len(relations)
             continue
         
-        print(f"\n[INFO] Processing work item {source_work_item_id} → {target_source_work_item_id}")
+        print(f"\n[INFO] Processing work item {source_work_item_id} → {target_source_work_item_id}...")
         
+        # Processes each cross-project relationship for the current work item.
         for relation in relations:
-            source_target_work_item_id = relation['target_work_item_id']
+            source_target_work_item_id = relation['target_work_item_id'] # The external work item being linked to in the source environment.
             target_project = relation['target_project']
             relation_type = relation['relation_type']
             
-            # Get target work item ID for the external work item
             if target_project in external_projects_mapping:
+                # Gets the equivalent target work item ID in the target environment.
+                # 11168 → 1380 in the target environment.
                 target_target_work_item_id = external_projects_mapping[target_project].get(source_target_work_item_id)
                 
                 if target_target_work_item_id:
-                    # Create the formal relationship (Azure DevOps handles reverse automatically)
+                    # Creates the formal relationship (Azure DevOps automatically handles creating the reverse relationship).
                     success, message = create_work_item_link(
                         TARGET_ORGANIZATION,
                         TARGET_AUTHENTICATION_HEADER,
@@ -792,51 +797,39 @@ def recreate_cross_project_links(target_organization, target_authentication_head
                     
                     if message == "Link already exists":
                         results['skipped'] += 1
-                        print(f"\033[1;33m[INFO] Link already exists: {target_source_work_item_id} ↔ {target_target_work_item_id} [{relation_type}]\033[0m")
+                        print(f"\033[1;33m[INFO] Link already exists: {target_source_work_item_id} ↔ {target_target_work_item_id} ({relation_type})\033[0m")
+                    
                     elif success:
                         results['success'] += 1
-                        print(f"\033[1;32m[SUCCESS] Created bidirectional link: {target_source_work_item_id} ↔ {target_target_work_item_id} [{relation_type}]\033[0m")
+                        print(f"\033[1;32m[SUCCESS] Created bidirectional link: {target_source_work_item_id} ↔ {target_target_work_item_id} ({relation_type})\033[0m")
                         
-                        # Update comments in both work items
-                        # Update comments in the source work item (main project)
-                        comment_success, comment_message = update_work_item_comments(
+                        # Adds a reference comment only to the source work item in the target environment.
+                        comment_success, comment_message = add_reference_update_comment(
                             TARGET_ORGANIZATION,
                             TARGET_AUTHENTICATION_HEADER,
                             target_source_work_item_id,
-                            all_id_mappings
+                            source_target_work_item_id,
+                            target_target_work_item_id
                         )
                         
-                        if comment_success and "Updated" in comment_message:
+                        if comment_success:
                             results['comment_updates'] += 1
-                            print(f"\033[1;36m[INFO] {comment_message} for work item {target_source_work_item_id}\033[0m")
-                        elif not comment_success:
+                            print(f"\033[1;36m[INFO] '{comment_message}' for work item {target_source_work_item_id}.\033[0m")
+
+                        else:
                             results['comment_failures'] += 1
-                            print(f"\033[1;31m[WARNING] Failed to update comments for work item {target_source_work_item_id}: {comment_message}\033[0m")
-                        
-                        # Update comments in the target work item (external project)
-                        comment_success2, comment_message2 = update_work_item_comments(
-                            TARGET_ORGANIZATION,
-                            TARGET_AUTHENTICATION_HEADER,
-                            target_target_work_item_id,
-                            all_id_mappings
-                        )
-                        
-                        if comment_success2 and "Updated" in comment_message2:
-                            results['comment_updates'] += 1
-                            print(f"\033[1;36m[INFO] {comment_message2} for work item {target_target_work_item_id}\033[0m")
-                        elif not comment_success2:
-                            results['comment_failures'] += 1
-                            print(f"\033[1;31m[WARNING] Failed to update comments for work item {target_target_work_item_id}: {comment_message2}\033[0m")
+                            print(f"\033[1;31m[WARNING] Failed to add comment to work item {target_source_work_item_id}: '{comment_message}'\033[0m")
                             
                     else:
                         results['failed'] += 1
-                        print(f"\033[1;31m[ERROR] Failed to create link: {target_source_work_item_id} → {target_target_work_item_id} [{relation_type}]: {message}\033[0m")
+                        print(f"\033[1;31m[ERROR] Failed to create link: {target_source_work_item_id} → {target_target_work_item_id} ({relation_type}): {message}\033[0m")
                         
                 else:
-                    print(f"\033[1;38;5;214m[WARNING] No target mapping found for external work item {source_target_work_item_id} in project '{target_project}'. Skipping...\033[0m")
+                    print(f"\033[1;38;5;214m[WARNING] No target mapping found for external work item {source_target_work_item_id} in project '{target_project}' in the target environment. Skipping...\033[0m")
                     results['skipped'] += 1
+                    
             else:
-                print(f"\033[1;38;5;214m[WARNING] No mapping found for external project '{target_project}'. Skipping...\033[0m")
+                print(f"\033[1;38;5;214m[WARNING] No mapping found for external project '{target_project}' in the target environment. Skipping...\033[0m")
                 results['skipped'] += 1
     
     print("\n" + "\033[1m=\033[0m" * 100)
@@ -846,20 +839,10 @@ def recreate_cross_project_links(target_organization, target_authentication_head
     print(f"• Total links successfully created: {results['success']}")
     print(f"• Total links failed to be created: {results['failed']}")
     print(f"• Total links skipped: {results['skipped']}")
-    print(f"• Work item comments updated: {results['comment_updates']}")
-    print(f"• Comment update failures: {results['comment_failures']}")
+    print(f"• Reference comments added: {results['comment_updates']}")
+    print(f"• Comment failures: {results['comment_failures']}")
     
     return results
 
 if __name__ == "__main__":
-    #cross_project_relations = extract_cross_project_work_item_relations(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER)
-    #external_mapping_results = map_cross_project_work_items(SOURCE_ORGANIZATION, SOURCE_AUTHENTICATION_HEADER, TARGET_ORGANIZATION, TARGET_AUTHENTICATION_HEADER, cross_project_relations)
-    #source_project_mapping = map_source_project_work_items(SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER, TARGET_ORGANIZATION, "System Requirements", TARGET_AUTHENTICATION_HEADER)
-    #analyze_bidirectional_relationships(SOURCE_ORGANIZATION, SOURCE_AUTHENTICATION_HEADER, 3722, 700)
-    add_reference_update_comment(
-    organization=TARGET_ORGANIZATION,
-    authentication_header=TARGET_AUTHENTICATION_HEADER,
-    work_item_id=4577,
-    old_id=11168,
-    new_id=1380
-)
+    recreate_cross_project_links()

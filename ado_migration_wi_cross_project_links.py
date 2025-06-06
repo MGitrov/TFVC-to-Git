@@ -127,112 +127,6 @@ def get_work_items(organization, project_name, authentication_header, work_item_
         print(f"\033[1;31m[ERROR] An error occurred while fetching work items: {e}\033[0m")
         return []
 
-def examine_work_item_relations(organization, project_name, authentication_header, sample_size=10):
-    """
-    This function examines work item relations to understand the cross-project link structure.
-    """
-    print("##############################")
-    print("[INFO] Examining work item relations structure...")
-    
-    work_items = get_work_items(organization, project_name, authentication_header)
-    
-    if not work_items:
-        print("[ERROR] No work items found to examine.")
-        return
-    
-    # Get current project ID for comparison
-    current_project_info = get_project_id(organization, project_name, authentication_header)
-    current_project_id = current_project_info
-    
-    # Take a sample of work items to examine
-    sample_work_items = work_items[:min(sample_size, len(work_items))]
-    
-    relation_types = set()
-    cross_project_relations = []
-    project_guid_cache = {}  # Cache for project GUID to name mapping
-    
-    for work_item in sample_work_items:
-        work_item_id = work_item.get('id')
-        work_item_type = work_item.get('fields', {}).get('System.WorkItemType', 'Unknown')
-        work_item_title = work_item.get('fields', {}).get('System.Title', 'Untitled')
-        work_item_project = work_item.get('fields', {}).get('System.TeamProject', 'Unknown')
-        
-        relations = work_item.get('relations', [])
-        
-        if not relations:
-            continue
-            
-        print(f"\n--- Work Item {work_item_id} ({work_item_type}: {work_item_title}) ---")
-        print(f"Project: {work_item_project}")
-        print(f"Total relations: {len(relations)}")
-        
-        for relation in relations:
-            rel_type = relation.get('rel', 'Unknown')
-            rel_url = relation.get('url', '')
-            rel_attributes = relation.get('attributes', {})
-            
-            relation_types.add(rel_type)
-            
-            # Check if this is a work item relation (not artifact link)
-            if 'workitems' in rel_url.lower() and rel_type != 'ArtifactLink':
-                # Extract work item ID from URL
-                work_item_match = re.search(r'/workitems/(\d+)', rel_url, re.IGNORECASE)
-                if work_item_match:
-                    linked_work_item_id = work_item_match.group(1)
-                    
-                    # Extract project GUID from URL
-                    project_guid = extract_project_guid_from_url(rel_url)
-                    
-                    if project_guid:
-                        # Check if it's a cross-project relation by comparing project GUIDs
-                        if project_guid != current_project_id:
-                            # Get project name from GUID (with caching)
-                            if project_guid not in project_guid_cache:
-                                project_info = get_project_by_id(organization, authentication_header, project_guid)
-                                if project_info:
-                                    project_guid_cache[project_guid] = project_info.get('name', 'Unknown')
-                                else:
-                                    project_guid_cache[project_guid] = 'Unknown'
-                            
-                            linked_project_name = project_guid_cache[project_guid]
-                            
-                            cross_project_relations.append({
-                                'source_work_item': work_item_id,
-                                'source_project': work_item_project,
-                                'target_work_item': linked_work_item_id,
-                                'target_project': linked_project_name,
-                                'target_project_guid': project_guid,
-                                'relation_type': rel_type,
-                                'relation_url': rel_url,
-                                'attributes': rel_attributes
-                            })
-                            
-                            print(f"  🔗 CROSS-PROJECT RELATION FOUND:")
-                            print(f"     Type: {rel_type}")
-                            print(f"     Links to: Work Item {linked_work_item_id} in project '{linked_project_name}' (GUID: {project_guid})")
-                            print(f"     URL: {rel_url}")
-                            print(f"     Attributes: {rel_attributes}")
-                        else:
-                            print(f"  ↪️ SAME-PROJECT RELATION:")
-                            print(f"     Type: {rel_type}")
-                            print(f"     Links to: Work Item {linked_work_item_id} in same project")
-            
-            print(f"  - Relation Type: {rel_type}")
-            print(f"    URL: {rel_url}")
-            if rel_attributes:
-                print(f"    Attributes: {rel_attributes}")
-    
-    print(f"\n##############################")
-    print(f"[SUMMARY] Found {len(relation_types)} unique relation types:")
-    for rel_type in sorted(relation_types):
-        print(f"  - {rel_type}")
-    
-    print(f"\n[SUMMARY] Found {len(cross_project_relations)} cross-project relations:")
-    for relation in cross_project_relations:
-        print(f"  - {relation['source_work_item']} ({relation['source_project']}) → {relation['target_work_item']} ({relation['target_project']}) [{relation['relation_type']}]")
-    
-    return cross_project_relations, relation_types
-
 def get_work_item_by_id(organization, authentication_header, work_item_id): # REVIEW.
     """
     Fetches a single work item by ID from any project in the organization.
@@ -751,42 +645,42 @@ def add_reference_update_comment(organization, authentication_header, work_item_
 
 def create_work_item_link(organization, authentication_header, source_work_item_id, target_work_item_id, relation_type):
     """
-    Creates a work item relationship link.
-    
-    Returns:
-    Tuple (success, message)
+    This function creates a one-way formal relationship link between two work items in the target environment.
+    Azure DevOps automatically handles creating the reverse relationship.
     """
     api_version = "7.1"
     
-    # First check if the link already exists
-    check_url = f"{organization}/_apis/wit/workitems/{source_work_item_id}?api-version={api_version}&$expand=relations"
+    # Checks whether the link already exists in the target environment.
+    link_check_url = f"{organization}/_apis/wit/workitems/{source_work_item_id}?api-version={api_version}&$expand=relations"
     
     try:
-        check_response = requests.get(check_url, headers=authentication_header)
+        check_response = requests.get(link_check_url, headers=authentication_header)
         
         if check_response.status_code == 200:
             work_item = check_response.json()
             relations = work_item.get('relations', [])
             
-            # Check if this exact link already exists
             target_url = f"{organization}/_apis/wit/workItems/{target_work_item_id}"
+
             for relation in relations:
                 if (relation.get('rel') == relation_type and 
                     relation.get('url') == target_url):
                     return False, "Link already exists"
+                
         else:
-            print(f"[WARNING] Could not check existing links: {check_response.status_code}")
+            print(f"\033[1;38;5;214m[WARNING] Could not check existing links: {check_response.status_code}\033[0m")
+
     except Exception as e:
-        print(f"[WARNING] Error checking existing links: {str(e)}")
+        print(f"\033[1;31m[ERROR] Error checking existing links: {str(e)}\033[0m")
     
-    # Create the link
+    # Creates the link if there is no link already exists in the target environment.
     url = f"{organization}/_apis/wit/workitems/{source_work_item_id}?api-version={api_version}"
     
     payload = [
         {
-            "op": "add",
-            "path": "/relations/-",
-            "value": {
+            "op": "add", # Operation type for adding new content to Azure DevOps.
+            "path": "/relations/-", # "-" means "append to end".
+            "value": { # The new relation object to add.
                 "rel": relation_type,
                 "url": f"{organization}/_apis/wit/workItems/{target_work_item_id}"
             }
@@ -804,14 +698,14 @@ def create_work_item_link(organization, authentication_header, source_work_item_
         if response.status_code in (200, 201):
             return True, "Link created successfully"
         else:
-            return False, f"{response.status_code}: {response.text}"
+            return False, f"Failed to create link: {response.status_code} - {response.text}"
             
     except requests.exceptions.RequestException as e:
-        return False, f"{str(e)}"
+        return False, f"Error creating link: {str(e)}"
 
 def recreate_cross_project_links(target_organization, target_authentication_header):
     """
-    Main function to recreate cross-project work item links and update comments.
+    This function recreates cross-project links between work items in an organization.
     """
     os.system('cls' if os.name == 'nt' else 'clear')
     ascii_art = pyfiglet.figlet_format("Cross-Project", font="ogre")

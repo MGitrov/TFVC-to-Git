@@ -30,14 +30,12 @@ TARGET_AUTHENTICATION_HEADER = {
 }
 
 def get_project_id(organization, project_name, authentication_header):
-    '''
+    """
     This function fetches the id of a project.
-    '''
+    """
     api_version = "7.1"
     url = f"{organization}/_apis/projects/{project_name}?api-version={api_version}"
 
-    #print("##############################")
-    #print(f"[INFO] Fetching the ID of '{project_name}' project from '{organization}'...")
     #print(f"[DEBUG] API URL: {url}")
 
     try:
@@ -46,7 +44,6 @@ def get_project_id(organization, project_name, authentication_header):
 
         if response.status_code == 200:
             project_id = response.json()["id"]
-            #print(f"Project: {project_name} | ID: {project_id}")
 
             return project_id
         
@@ -90,7 +87,6 @@ def get_work_items(organization, project_name, authentication_header, work_item_
                 if response.status_code == 200:
                     batch_items = response.json().get("value", [])
                     work_items.extend(batch_items)
-                    #print(f"[INFO] Retrieved {len(batch_items)} work items in batch.")
 
                 else:
                     print(f"\033[1;31m[ERROR] Failed to fetch work items batch from '{project_name}' project.\033[0m")
@@ -127,50 +123,62 @@ def get_work_items(organization, project_name, authentication_header, work_item_
         print(f"\033[1;31m[ERROR] An error occurred while fetching work items: {e}\033[0m")
         return []
 
-def get_work_item_by_id(organization, authentication_header, work_item_id): # REVIEW.
+def get_work_item_by_id(organization, authentication_header, work_item_id):
     """
-    Fetches a single work item by ID from any project in the organization.
+    This function fetches a single work item using its ID from a project.
     """
     api_version = "7.1"
     url = f"{organization}/_apis/wit/workitems/{work_item_id}?api-version={api_version}&$expand=all"
     
     try:
         response = requests.get(url, headers=authentication_header)
+        #print(f"[DEBUG] Request's Status Code: {response.status_code}")
         
         if response.status_code == 200:
             return response.json()
+        
         else:
+            print(f"\033[1;31m[ERROR] Failed to fetch work item ID {work_item_id}.\033[0m")
+            print(f"[DEBUG] Request's Status Code: {response.status_code}")
+            print(f"[DEBUG] Response Body: {response.text}")
             return None
-            
+    
     except requests.exceptions.RequestException as e:
+        print(f"\033[1;31m[ERROR] An error occurred while fetching work item ID: {e}\033[0m")
         return None
 
-def get_project_by_id(organization, authentication_header, project_id): # REVIEW.
+def get_project_by_id(organization, authentication_header, project_id):
     """
-    Fetches project information by project ID/GUID.
+    This function fetches project information by using its ID.
     """
     api_version = "7.1"
     url = f"{organization}/_apis/projects/{project_id}?api-version={api_version}"
     
     try:
         response = requests.get(url, headers=authentication_header)
+        #print(f"[DEBUG] Request's Status Code: {response.status_code}")
         
         if response.status_code == 200:
             return response.json()
+        
         else:
+            print(f"\033[1;31m[ERROR] Failed to fetch project ID '{project_id}'.\033[0m")
+            print(f"[DEBUG] Request's Status Code: {response.status_code}")
+            print(f"[DEBUG] Response Body: {response.text}")
             return None
-            
+    
     except requests.exceptions.RequestException as e:
+        print(f"\033[1;31m[ERROR] An error occurred while fetching project ID: {e}\033[0m")
         return None
 
-def normalize_string(text): # REVIEW.
+def normalize_string(text):
     """
-    Normalizes a string by removing extra whitespace, hidden characters, emojis, and special characters.
+    This function normalizes a string by handling hidden characters, different whitespace, emojis, or special characters.
     """
     if not text:
         return ""
     
-    # Convert to string if not already
+    # Ensures input is a string.
     text = str(text)
     
     # Replace smart quotes and similar characters with regular ones
@@ -182,78 +190,70 @@ def normalize_string(text): # REVIEW.
     text = text.replace('—', '-')  # Em dash
     text = text.replace('…', '...')  # Horizontal ellipsis
     
-    # Replace common problematic whitespace characters
-    text = text.replace('\u00A0', ' ')  # Non-breaking space
-    text = text.replace('\u2000', ' ')  # En quad
-    text = text.replace('\u2001', ' ')  # Em quad
-    text = text.replace('\u2002', ' ')  # En space
-    text = text.replace('\u2003', ' ')  # Em space
-    text = text.replace('\u2004', ' ')  # Three-per-em space
-    text = text.replace('\u2005', ' ')  # Four-per-em space
-    text = text.replace('\u2006', ' ')  # Six-per-em space
-    text = text.replace('\u2007', ' ')  # Figure space
-    text = text.replace('\u2008', ' ')  # Punctuation space
-    text = text.replace('\u2009', ' ')  # Thin space
-    text = text.replace('\u200A', ' ')  # Hair space
-    text = text.replace('\u202F', ' ')  # Narrow no-break space
-    text = text.replace('\u205F', ' ')  # Medium mathematical space
-    text = text.replace('\u3000', ' ')  # Ideographic space
+    # Handles common problematic whitespace characters.
+    text = text.replace('\u00A0', ' ')  # Non-breaking space.
+    text = text.replace('\u2000', ' ')  # En quad.
+    text = text.replace('\u2001', ' ')  # Em quad.
+    text = text.replace('\u2002', ' ')  # En space.
+    text = text.replace('\u2003', ' ')  # Em space.
+    text = text.replace('\u2004', ' ')  # Three-per-em space.
+    text = text.replace('\u2005', ' ')  # Four-per-em space.
+    text = text.replace('\u2006', ' ')  # Six-per-em space.
+    text = text.replace('\u2007', ' ')  # Figure space.
+    text = text.replace('\u2008', ' ')  # Punctuation space.
+    text = text.replace('\u2009', ' ')  # Thin space.
+    text = text.replace('\u200A', ' ')  # Hair space.
+    text = text.replace('\u202F', ' ')  # Narrow no-break space.
+    text = text.replace('\u205F', ' ')  # Medium mathematical space.
+    text = text.replace('\u3000', ' ')  # Ideographic space.
     
-    # Remove zero-width characters
-    text = text.replace('\u200B', '')  # Zero-width space
-    text = text.replace('\u200C', '')  # Zero-width non-joiner
-    text = text.replace('\u200D', '')  # Zero-width joiner
-    text = text.replace('\uFEFF', '')  # Zero-width no-break space
+    # Handles zero-width characters which are invisible but can break matching.
+    text = text.replace('\u200B', '')  # Zero-width space.
+    text = text.replace('\u200C', '')  # Zero-width non-joiner.
+    text = text.replace('\u200D', '')  # Zero-width joiner.
+    text = text.replace('\uFEFF', '')  # Zero-width no-break space.
     
-    # Remove emojis and other symbols
-    # This regex removes most emojis and symbols while keeping basic punctuation
-    #import re
-    
-    # Remove emojis (most common ranges)
+    # Handles common emojis and symbols.
     emoji_pattern = re.compile(
         "["
-        "\U0001F600-\U0001F64F"  # emoticons
-        "\U0001F300-\U0001F5FF"  # symbols & pictographs
-        "\U0001F680-\U0001F6FF"  # transport & map symbols
-        "\U0001F1E0-\U0001F1FF"  # flags (iOS)
-        "\U00002702-\U000027B0"  # dingbats
-        "\U000024C2-\U0001F251" 
-        "\U0001f926-\U0001f937"  # additional faces
-        "\U00010000-\U0010ffff"  # supplementary planes
-        "\u2640-\u2642"          # gender symbols
-        "\u2600-\u2B55"          # misc symbols
-        "\u200d"                 # zero width joiner
-        "\u23cf"                 # eject symbol
-        "\u23e9"                 # fast forward
-        "\u231a"                 # watch
-        "\ufe0f"                 # variation selector
-        "\u3030"                 # wavy dash
+        "\U0001F600-\U0001F64F"  # Emoticons.
+        "\U0001F300-\U0001F5FF"  # Symbols & pictographs.
+        "\U0001F680-\U0001F6FF"  # Transport & map symbols.
+        "\U0001F1E0-\U0001F1FF"  # Flags.
+        "\U00002702-\U000027B0"  # Dingbats.
+        "\U000024C2-\U0001F251"  # Mixed range - catches scattered emoji additions.
+        "\U0001f926-\U0001f937"  # Additional faces.
+        "\U0001f900-\U0001f9ff"  # Supplementary planes.
+        "\u2640-\u2642"          # Gender symbols.
+        "\u2600-\u2B55"          # Misc symbols.
+        "\u200d"                 # Zero width joiner.
+        "\u23cf"                 # Eject symbol.
+        "\u23e9"                 # Fast forward.
+        "\u231a"                 # Watch.
+        "\ufe0f"                 # Variation selector.
+        "\u3030"                 # Wavy dash.
         "]+", 
         flags=re.UNICODE
     )
     text = emoji_pattern.sub('', text)
-    
-    # Remove specific problematic characters found in your data
-    text = text.replace('👀', '')   # Eyes emoji
-    text = text.replace('🕒', '')   # Clock emoji  
-    text = text.replace('🤔', '')   # Thinking emoji
-    
-    # Normalize whitespace: strip and replace multiple spaces with single space
+
+    # Normalizes whitespace, strips and replaces multiple spaces with single space.
     text = ' '.join(text.split())
     
     return text
 
-def extract_project_guid_from_url(url): # REVIEW.
+def extract_project_id_from_url(url):
     """
-    Extracts project GUID from Azure DevOps work item URL.
-    Expected format: http://server/tfs/DefaultCollection/[PROJECT_GUID]/_apis/wit/workItems/[ID]
+    This function extracts the project ID from a work item URL.
+    Currently supports only Azure DevOps Server URLs.
     """
-    # Pattern to match project GUID in the URL
-    pattern = r'/tfs/DefaultCollection/([0-9a-f-]{36})/_apis/wit/workItems'
-    match = re.search(pattern, url, re.IGNORECASE)
+    # Azure DevOps Server pattern: /tfs/DefaultCollection/[ID]/_apis/wit/workItems
+    server_pattern = r'/tfs/DefaultCollection/([0-9a-f-]{36})/_apis/wit/workItems'
+    server_match = re.search(server_pattern, url, re.IGNORECASE)
     
-    if match:
-        return match.group(1)
+    if server_match:
+        return server_match.group(1)
+    
     return None
 
 def extract_cross_project_work_item_relations(organization, project_name, authentication_header):
@@ -275,7 +275,6 @@ def extract_cross_project_work_item_relations(organization, project_name, authen
         ]
     }
     """
-    print("##############################")
     print("[INFO] Extracting cross-project work item relationships...")
     
     work_items = get_work_items(organization, project_name, authentication_header)
@@ -323,7 +322,8 @@ def extract_cross_project_work_item_relations(organization, project_name, authen
                 linked_work_item_id = work_item_match.group(1)
                 
                 # Extracts the project ID from the relation URL (e.g., what project the linked work item is located in).
-                project_id = extract_project_guid_from_url(relation_url)
+                # CURRENTLY SUPPORTS ONLY AZURE DEVOPS SERVER!
+                project_id = extract_project_id_from_url(relation_url)
                 
                 # Checks whether this is a cross-project link.
                 if project_id and project_id != current_project_id:
@@ -405,7 +405,6 @@ def map_cross_project_work_items(source_organization, source_authentication_head
         }
     }
     """
-    print("##############################")
     print("[INFO] Mapping cross-project work items...")
     
     # Encompasses all external projects and work items there is a need to map.
@@ -818,7 +817,7 @@ def recreate_cross_project_links():
 
                         else:
                             results['comment_failures'] += 1
-                            print(f"\033[1;31m[WARNING] Failed to add comment to work item {target_source_work_item_id}: '{comment_message}'\033[0m")
+                            print(f"\033[1;38;5;214m[WARNING] Failed to add comment to work item {target_source_work_item_id}: '{comment_message}'\033[0m")
                             
                     else:
                         results['failed'] += 1

@@ -735,7 +735,7 @@ def recreate_cross_project_links():
     # Step 2: Maps work items of the source project between both environments.
     source_project_mapping = map_source_project_work_items(
         SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER,
-        TARGET_ORGANIZATION, TARGET_PROJECT, TARGET_AUTHENTICATION_HEADER
+        TARGET_ORGANIZATION, SOURCE_PROJECT, TARGET_AUTHENTICATION_HEADER
     )
     
     # Step 3: Maps work items of the external projects between both environments.

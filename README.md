@@ -116,6 +116,18 @@ devopsmigration execute --config .\work-items.json
 ```
 :warning: You may need to modify the ```work-items.json``` file to fit your specific needs - :link: [**DOCUMENTATION**](https://nkdagility.com/learn/azure-devops-migration-tools/).
 
+**Cross-Project Links:**
+
+![usedToolBadge](https://img.shields.io/badge/Tool-ado__migration__wi__cross__project__links.py-blue?style=social)
+
+:warning: **Prior to the execution of the ```ado_migration_wi_cross_project_links.py``` script, make sure all the relevant work items already migrated to target organization.**
+
+:warning: **Prior to the execution of the ```ado_migration_wi_cross_project_links.py``` script, make sure all the cross-referenced projects exist in target organization.**
+
+:warning: **Prior to the execution of the ```ado_migration_wi_cross_project_links.py``` script, make sure all the relevant work item titles and types preserved during migration.**
+
+When work items are migrated, links within the same project are preserved by "Azure DevOps Migration Tools", but cross-project links are lost. The ```ado_migration_wi_cross_project_links.py``` script recreates these cross-project links.
+
 ### :four: Branches and Changesets Migration
 ![usedToolBadge](https://img.shields.io/badge/Tool-git--tfs-blue?style=for-the-badge&labelColor=orange)
 

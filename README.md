@@ -75,7 +75,7 @@ The ```ado_migration_artifacts.py``` script handles the migration of feeds' pack
 
 **Reverse Proxy:**
 
-THIS SECTION IS RELEVANT FOR EVERY PART WE MIGRATE USING THE AZURE DEVOPS MIGRATION TOOLS.
+✅ **This section is relevant for every part being migrated from Azure DevOps Server using "Azure DevOps Migration Tools".**
 
 The Azure DevOps Migration Tools have to use an HTTPS connection to the Azure DevOps Server. Usually, the Azure DevOps Server use the HTTP protocol which is not compatible with the requirement.
 

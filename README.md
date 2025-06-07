@@ -73,8 +73,6 @@ The ```tfvc_to_git_artifacts.py``` script handles the migration of feeds' packag
 
 ![usedToolBadge](https://img.shields.io/badge/Tool-Azure%20DevOps%20Migration%20Tools-blue?style=for-the-badge&labelColor=orange)
 
-:hourglass_flowing_sand: A migration of 2,400~ work items took two hours.
-
 **Reverse Proxy:**
 
 THIS SECTION IS RELEVANT FOR EVERY PART WE MIGRATE USING THE AZURE DEVOPS MIGRATION TOOLS.

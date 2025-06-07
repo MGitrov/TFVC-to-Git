@@ -118,6 +118,8 @@ devopsmigration execute --config .\work-items.json
 
 ![usedToolBadge](https://img.shields.io/badge/Tool-ado__migration__wi__cross__project__links.py-blue?style=social)
 
+✅ **Currently supports only Azure DevOps Server (on-premises) to Azure DevOps Services (cloud) migrations.**
+
 :warning: **Prior to the execution of the ```ado_migration_wi_cross_project_links.py``` script, make sure all the relevant work items already migrated to target organization.**
 
 :warning: **Prior to the execution of the ```ado_migration_wi_cross_project_links.py``` script, make sure all the cross-referenced projects exist in target organization.**

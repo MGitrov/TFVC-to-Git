@@ -61,13 +61,13 @@ witadmin exportprocessconfig /collection:<collection_url> /p:<project_name> /f:"
 * ```"DirectoryPath\ProcessConfiguration.xml"``` will export the XML file to your current working directory, can be modified as well.
 
 ### :two: Feeds Migration
-![usedToolBadge](https://img.shields.io/badge/Tool-tfvc__to__git__artifacts.py-blue?style=social)
+![usedToolBadge](https://img.shields.io/badge/Tool-ado__migration__artifacts.py-blue?style=social)
 
 Artifacts Feeds provide secure and private package management for your organization. They store and distribute packages (e.g., NuGet, npm, Maven) that your projects depend on, enabling versioning, access control, and simplified dependency management. Feeds can host both private packages developed by your team and cached copies of public packages, ensuring reliable builds while maintaining control over which external dependencies are approved for use.
 
-:warning: **Prior to the execution of the ```tfvc_to_git_artifacts.py``` script, make sure the feed itself, its views and upstream source(s) are created in the target organization.**
+:warning: **Prior to the execution of the ```ado_migration_artifacts.py``` script, make sure the feed itself, its views and upstream source(s) are created in the target organization.**
 
-The ```tfvc_to_git_artifacts.py``` script handles the migration of feeds' packages, but only packages with source configured as 'This feed'. This is because packages with source configured as a public source are available through the public source, and Azure DevOps will reject its migration (unless the specific public source is not configured for the feed).
+The ```ado_migration_artifacts.py``` script handles the migration of feeds' packages, but only packages with source configured as 'This feed'. This is because packages with source configured as a public source are available through the public source, and Azure DevOps will reject its migration (unless the specific public source is not configured for the feed).
 
 ### :three: Work Items (Boards, Backlogs, and Sprints), Iterations and Areas, and Teams Migration
 

@@ -61,23 +61,21 @@ witadmin exportprocessconfig /collection:<collection_url> /p:<project_name> /f:"
 * ```"DirectoryPath\ProcessConfiguration.xml"``` will export the XML file to your current working directory, can be modified as well.
 
 ### :two: Feeds Migration
-![usedToolBadge](https://img.shields.io/badge/Tool-tfvc__to__git__artifacts.py-blue?style=social)
+![usedToolBadge](https://img.shields.io/badge/Tool-ado__migration__artifacts.py-blue?style=social)
 
 Artifacts Feeds provide secure and private package management for your organization. They store and distribute packages (e.g., NuGet, npm, Maven) that your projects depend on, enabling versioning, access control, and simplified dependency management. Feeds can host both private packages developed by your team and cached copies of public packages, ensuring reliable builds while maintaining control over which external dependencies are approved for use.
 
-:warning: **Prior to the execution of the ```tfvc_to_git_artifacts.py``` script, make sure the feed itself, its views and upstream source(s) are created in the target organization.**
+:warning: **Prior to the execution of the ```ado_migration_artifacts.py``` script, make sure the feed itself, its views and upstream source(s) are created in the target organization.**
 
-The ```tfvc_to_git_artifacts.py``` script handles the migration of feeds' packages, but only packages with source configured as 'This feed'. This is because packages with source configured as a public source are available through the public source, and Azure DevOps will reject its migration (unless the specific public source is not configured for the feed).
+The ```ado_migration_artifacts.py``` script handles the migration of feeds' packages, but only packages with source configured as 'This feed'. This is because packages with source configured as a public source are available through the public source, and Azure DevOps will reject its migration (unless the specific public source is not configured for the feed).
 
 ### :three: Work Items (Boards, Backlogs, and Sprints), Iterations and Areas, and Teams Migration
 
 ![usedToolBadge](https://img.shields.io/badge/Tool-Azure%20DevOps%20Migration%20Tools-blue?style=for-the-badge&labelColor=orange)
 
-:hourglass_flowing_sand: A migration of 2,400~ work items took two hours.
-
 **Reverse Proxy:**
 
-THIS SECTION IS RELEVANT FOR EVERY PART WE MIGRATE USING THE AZURE DEVOPS MIGRATION TOOLS.
+✅ **This section is relevant for every part being migrated from Azure DevOps Server using "Azure DevOps Migration Tools".**
 
 The Azure DevOps Migration Tools have to use an HTTPS connection to the Azure DevOps Server. Usually, the Azure DevOps Server use the HTTP protocol which is not compatible with the requirement.
 
@@ -115,6 +113,20 @@ Work items (boards, backlogs, and sprints), iterations and areas, and teams migr
 devopsmigration execute --config .\work-items.json
 ```
 :warning: You may need to modify the ```work-items.json``` file to fit your specific needs - :link: [**DOCUMENTATION**](https://nkdagility.com/learn/azure-devops-migration-tools/).
+
+**Cross-Project Links:**
+
+![usedToolBadge](https://img.shields.io/badge/Tool-ado__migration__wi__cross__project__links.py-blue?style=social)
+
+✅ **Currently supports only Azure DevOps Server (on-premises) to Azure DevOps Services (cloud) migrations.**
+
+:warning: **Prior to the execution of the ```ado_migration_wi_cross_project_links.py``` script, make sure all the relevant work items already migrated to target organization.**
+
+:warning: **Prior to the execution of the ```ado_migration_wi_cross_project_links.py``` script, make sure all the cross-referenced projects exist in target organization.**
+
+:warning: **Prior to the execution of the ```ado_migration_wi_cross_project_links.py``` script, make sure all the relevant work item titles and types preserved during migration.**
+
+When work items are migrated, links within the same project are preserved by "Azure DevOps Migration Tools", but cross-project links are lost. The ```ado_migration_wi_cross_project_links.py``` script recreates these cross-project links.
 
 ### :four: Branches and Changesets Migration
 ![usedToolBadge](https://img.shields.io/badge/Tool-git--tfs-blue?style=for-the-badge&labelColor=orange)

@@ -65,7 +65,7 @@
               "Enabled": true,
               "UpdateCreatedDate": true,
               "UpdateCreatedBy": true,
-              "WIQLQuery": "SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @TeamProject AND [System.WorkItemType] NOT IN ('Test Case', 'Test Suite', 'Test Plan','Shared Steps','Shared Parameter','Feedback Request') ORDER BY [System.ChangedDate] desc",
+              "WIQLQuery": "SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @TeamProject AND [System.WorkItemType] NOT IN ('Test Case', 'Test Suite', 'Test Plan','Shared Steps','Shared Parameter','Feedback Request','Feedback Response', 'Code Review Request', 'Code Review Response') ORDER BY [System.ChangedDate] desc",
               "FixHtmlAttachmentLinks": true,
               "WorkItemCreateRetryLimit": 5,
               "FilterWorkItemsThatAlreadyExistInTarget": false,

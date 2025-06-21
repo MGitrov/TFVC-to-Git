@@ -660,12 +660,17 @@ def create_work_item_link(organization, authentication_header, source_work_item_
             work_item = check_response.json()
             relations = work_item.get('relations', [])
             
-            target_url = f"{organization}/_apis/wit/workItems/{target_work_item_id}"
-
+            # Check if this exact link already exists
             for relation in relations:
-                if (relation.get('rel') == relation_type and 
-                    relation.get('url') == target_url):
-                    return False, "Link already exists"
+                if relation.get('rel') == relation_type:
+                    # Extract work item ID from the relation URL
+                    relation_url = relation.get('url', '')
+                    # Look for pattern like: .../workitems/12345 or .../workItems/12345
+                    work_item_match = re.search(r'/workitems?/(\d+)', relation_url, re.IGNORECASE)
+                    if work_item_match:
+                        linked_work_item_id = int(work_item_match.group(1))
+                        if linked_work_item_id == target_work_item_id:
+                            return False, "Link already exists"
                 
         else:
             print(f"\033[1;38;5;214m[WARNING] Could not check existing links: {check_response.status_code}\033[0m")
@@ -736,7 +741,7 @@ def recreate_cross_project_links():
     # Step 2: Maps work items of the source project between both environments.
     source_project_mapping = map_source_project_work_items(
         SOURCE_ORGANIZATION, SOURCE_PROJECT, SOURCE_AUTHENTICATION_HEADER,
-        TARGET_ORGANIZATION, TARGET_PROJECT, TARGET_AUTHENTICATION_HEADER
+        TARGET_ORGANIZATION, SOURCE_PROJECT, TARGET_AUTHENTICATION_HEADER
     )
     
     # Step 3: Maps work items of the external projects between both environments.
@@ -749,6 +754,14 @@ def recreate_cross_project_links():
     # Step 4: Recreates the links in the target environment.
     print("\n" + "\033[1m-\033[0m" * 50)
     print("[INFO] Starting cross-project link recreation...")
+    
+    # Initialize batch processing variables
+    processed_work_items = 0
+    total_work_items = len(cross_project_relations)
+    batch_size = 500
+    
+    print(f"[INFO] Total work items to process: {total_work_items}")
+    print(f"[INFO] Will pause for user confirmation every {batch_size} work items.")
     
     # Processes each source work item that has cross-project relationships.
     for source_work_item_id, relations in cross_project_relations.items():
@@ -763,6 +776,26 @@ def recreate_cross_project_links():
             ]
         }
         '''
+        
+        # Check if we need to pause for user input
+        if processed_work_items > 0 and processed_work_items % batch_size == 0:
+            print(f"\n" + "\033[1m*\033[0m" * 80)
+            print(f"\033[1;33m[BATCH COMPLETED] Processed {processed_work_items}/{total_work_items} work items\033[0m")
+            print(f"\033[1;36mCurrent progress:\033[0m")
+            print(f"  • Links created: {results['success']}")
+            print(f"  • Links failed: {results['failed']}")
+            print(f"  • Links skipped: {results['skipped']}")
+            print(f"  • Comments added: {results['comment_updates']}")
+            print(f"\033[1m*\033[0m" * 80)
+            
+            user_input = input(f"\033[1;32mPress Enter to continue processing the next {batch_size} work items (or 'q' to quit): \033[0m").strip().lower()
+            
+            if user_input == 'q' or user_input == 'quit':
+                print(f"\n\033[1;31m[INFO] User requested to stop processing. Processed {processed_work_items}/{total_work_items} work items.\033[0m")
+                break
+            
+            print(f"\n[INFO] Continuing with work item processing...")
+        
         # Gets the equivalent source work item ID in the target environment.
         # 11523 → 4577 in the target environment.
         target_source_work_item_id = source_project_mapping.get(int(source_work_item_id))
@@ -770,9 +803,10 @@ def recreate_cross_project_links():
         if not target_source_work_item_id:
             print(f"\033[1;38;5;214m[WARNING] No mapping found in the target environment for source work item {source_work_item_id}. Skipping...\033[0m")
             results['skipped'] += len(relations)
+            processed_work_items += 1
             continue
         
-        print(f"\n[INFO] Processing work item {source_work_item_id} → {target_source_work_item_id}...")
+        print(f"\n[INFO] Processing work item {processed_work_items + 1}/{total_work_items}: {source_work_item_id} (in '{SOURCE_PROJECT}' in the source environment) → {target_source_work_item_id} (in '{SOURCE_PROJECT}' in the target environment)...")
         
         # Processes each cross-project relationship for the current work item.
         for relation in relations:
@@ -801,20 +835,20 @@ def recreate_cross_project_links():
                     
                     elif success:
                         results['success'] += 1
-                        print(f"\033[1;32m[SUCCESS] Created bidirectional link: {target_source_work_item_id} ↔ {target_target_work_item_id} ({relation_type})\033[0m")
+                        print(f"\033[1;32m[SUCCESS] Created bidirectional link ({relation_type}): {target_source_work_item_id} (in '{SOURCE_PROJECT}' in the target environment) ↔ {target_target_work_item_id} (in '{TARGET_PROJECT}' in the target environment)\033[0m")
                         
                         # Adds a reference comment only to the source work item in the target environment.
                         comment_success, comment_message = add_reference_update_comment(
                             TARGET_ORGANIZATION,
                             TARGET_AUTHENTICATION_HEADER,
-                            target_source_work_item_id,
-                            source_target_work_item_id,
-                            target_target_work_item_id
+                            target_target_work_item_id,     # 4577 (main work item - where comment goes)
+                            source_work_item_id,     # 11168 (old external work item ID)
+                            target_source_work_item_id      # 1380 (new external work item ID)
                         )
                         
                         if comment_success:
                             results['comment_updates'] += 1
-                            print(f"\033[1;36m[INFO] '{comment_message}' for work item {target_source_work_item_id}.\033[0m")
+                            print(f"\033[1;36m[INFO] '{comment_message}' for work item {target_target_work_item_id}.\033[0m")
 
                         else:
                             results['comment_failures'] += 1
@@ -825,17 +859,21 @@ def recreate_cross_project_links():
                         print(f"\033[1;31m[ERROR] Failed to create link: {target_source_work_item_id} → {target_target_work_item_id} ({relation_type}): {message}\033[0m")
                         
                 else:
-                    print(f"\033[1;38;5;214m[WARNING] No target mapping found for external work item {source_target_work_item_id} in project '{target_project}' in the target environment. Skipping...\033[0m")
+                    print(f"\n\033[1;38;5;214m[WARNING] No target mapping found for external work item {source_target_work_item_id} in project '{target_project}' in the target environment. Skipping...\033[0m")
                     results['skipped'] += 1
                     
             else:
-                print(f"\033[1;38;5;214m[WARNING] No mapping found for external project '{target_project}' in the target environment. Skipping...\033[0m")
+                print(f"\n\033[1;38;5;214m[WARNING] No mapping found for external project '{target_project}' in the target environment. Skipping...\033[0m")
                 results['skipped'] += 1
+        
+        # Increment the processed work items counter
+        processed_work_items += 1
     
     print("\n" + "\033[1m=\033[0m" * 100)
     print("\033[1mCROSS-PROJECT LINK RECREATION SUMMARY\033[0m")
     print("\033[1m=\033[0m" * 100)
     
+    print(f"• Total work items processed: {processed_work_items}/{total_work_items}")
     print(f"• Total links successfully created: {results['success']}")
     print(f"• Total links failed to be created: {results['failed']}")
     print(f"• Total links skipped: {results['skipped']}")

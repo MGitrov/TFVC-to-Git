@@ -508,26 +508,27 @@ def process_changeset_operations(operations, changeset_id):
             else:
                 print(f"\033[1m[INFO] Operation {index+1}/{len(operations)}: {operation} {file_path.split('/')[-1]}\033[0m")
             
-            # Convert TFS server path to local path
+                        # Convert TFS server path to local path
             local_file_path = convert_server_path_to_local(file_path)
             source_file_path = convert_server_path_to_source_local(file_path)
             
-            if index < 3:  # Show path conversion debug for first 3 operations
+            if i < 3:  # Show path conversion debug for first 3 operations
                 print(f"\033[1;36m[DEBUG] Server path: {file_path}\033[0m")
                 print(f"\033[1;36m[DEBUG] Source local: {source_file_path}\033[0m")
                 print(f"\033[1;36m[DEBUG] Target local: {local_file_path}\033[0m")
             
-            # Determine if this is likely a directory or file based on path
-            is_likely_file = '.' in os.path.basename(file_path)  # Has file extension
-            
             if operation == 'add':
                 # Handle new file or directory
-                if copy_and_add_file(source_file_path, local_file_path, file_path):
-                    if is_likely_file:
-                        add_count += 1
-                    else:
-                        skipped_count += 1
-                else:
+                status, success = copy_and_add_file(source_file_path, local_file_path)
+                
+                if status == 'success':
+                    actual_files_added += 1
+                elif status == 'skipped':
+                    skipped_directories += 1
+                elif status == 'already_tracked':
+                    already_tracked_files += 1
+                elif status == 'failed':
+                    failed_operations += 1
                     print(f"\033[1;38;5;214m[WARNING] Failed to process add operation for {file_path}\033[0m")
                     
             elif operation == 'edit':
@@ -535,6 +536,7 @@ def process_changeset_operations(operations, changeset_id):
                 if checkout_and_update_file(source_file_path, local_file_path, file_path):
                     edit_count += 1
                 else:
+                    failed_operations += 1
                     print(f"\033[1;38;5;214m[WARNING] Failed to process edit operation for {file_path}\033[0m")
                     
             elif operation == 'delete':
@@ -542,12 +544,21 @@ def process_changeset_operations(operations, changeset_id):
                 if delete_file(file_path):
                     other_count += 1
                 else:
+                    failed_operations += 1
                     print(f"\033[1;38;5;214m[WARNING] Failed to process delete operation for {file_path}\033[0m")
             else:
                 print(f"\033[1;33m[INFO] Skipping unsupported operation: {operation} {file_path}\033[0m")
                 other_count += 1
         
-        print(f"\033[1;32m[TARGETED] Completed: {add_count} files added, {edit_count} edits, {other_count} others, {skipped_count} directories skipped\033[0m")
+        print(f"\033[1;32m[TARGETED] Processing Summary:\033[0m")
+        print(f"  • New files actually added to TFS: {actual_files_added}")
+        print(f"  • Files already tracked (not added): {already_tracked_files}")
+        print(f"  • Directories skipped: {skipped_directories}")
+        print(f"  • Edit operations: {edit_count}")
+        print(f"  • Other operations: {other_count}")
+        print(f"  • Failed operations: {failed_operations}")
+        print(f"\033[1;36m[INFO] Azure DevOps should show: {actual_files_added + edit_count + other_count} file changes\033[0m")
+        
         return True
         
     except Exception as e:
@@ -664,44 +675,46 @@ def copy_and_add_file(source_file, target_file):
         print(f"\n\033[1;31m[ERROR] Failed to copy and add '{source_file}': {e}\033[0m")
         return ('failed', False)
     
-def checkout_and_update_file(source_file, target_file, server_path):
+def checkout_and_update_file(source_file, target_file):
     """
-    Checks out an existing file and updates it with new content.
+    This function handles edit operations - when a file already exists in TFVC and needs to be updated with a new version.
     """
     try:
-        # Checkout the file for editing
+        # Checks out the file for editing.
         checkout_result = execute_tf_command(f'checkout "{target_file}" /noprompt')
         
         if checkout_result:
-            # Copy the new version
+            # Overwrites the existing file with the updated version from the source changeset.
             if os.path.exists(source_file):
                 shutil.copy2(source_file, target_file)
                 return True
+            
             else:
-                print(f"\033[1;38;5;214m[WARNING] Source file not found: {source_file}\033[0m")
+                print(f"\033[1;38;5;214m[WARNING] Source file not found: '{source_file}'\033[0m")
                 return False
+            
         else:
-            print(f"\033[1;38;5;214m[WARNING] Failed to checkout file: {target_file}\033[0m")
+            print(f"\033[1;38;5;214m[WARNING] Failed to checkout '{target_file}'.\033[0m")
             return False
             
     except Exception as e:
-        print(f"\033[1;31m[ERROR] Failed to checkout and update file {target_file}: {e}\033[0m")
+        print(f"\n\033[1;31m[ERROR] Failed to checkout and update '{target_file}': {e}\033[0m")
         return False
     
 def delete_file(server_path):
     """
-    Deletes a file from TFS.
+    This function handles delete operations - when a file that existed in previous changesets needs to be removed from TFVC as part of the current changeset migration.
     """
     try:
-        # Convert to local path
-        local_file = convert_server_path_to_local(server_path)
+        # Converts server path to local path because TFVC commands work on local workspace files.
+        local_file = convert_server_path_to_target_local(server_path)
         
-        # Delete from TFS
+        # Marks file for deletion for the next check-in.
         result = execute_tf_command(f'delete "{local_file}" /noprompt')
         return bool(result)
         
     except Exception as e:
-        print(f"\033[1;31m[ERROR] Failed to delete file {server_path}: {e}\033[0m")
+        print(f"\n\033[1;31m[ERROR] Failed to delete '{server_path}': {e}\033[0m")
         return False
 
 def get_changeset_operations(changeset_details):

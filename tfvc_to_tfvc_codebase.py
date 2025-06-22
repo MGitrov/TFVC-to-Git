@@ -340,10 +340,6 @@ def process_regular_changeset(changeset_id):
         f"changeset {changeset_id} /collection:{source_collection} /noprompt"
     )
 
-    # Analyze changeset before processing
-    print(f"\n\033[1m[ANALYSIS] Analyzing changeset {changeset_id}...\033[0m")
-    operations = analyze_changeset(changeset_details, changeset_id)
-
     comment_match = re.search(r"Comment:\s*(.*?)(?:\r?\n\r?\n|\r?\n$|$)", changeset_details, re.DOTALL) # Extracts the comment for use in the changeset's check-in.
 
     if comment_match:
@@ -624,43 +620,49 @@ def convert_server_path_to_source_local(server_path):
         print(f"\n\033[1;31m[ERROR] Path conversion failed for '{server_path}': {e}\033[0m")
         return server_path
 
-def copy_and_add_file(source_file, target_file, server_path):
+def copy_and_add_file(source_file, target_file):
     """
-    Copies a file from source to target and adds it to TFS.
-    Handles both files and directories appropriately.
+    This function copies file from the source location to the target location, and adds it to TFVC.
     """
     try:
-        # Check if this is a directory
+        # Checks whether the source path is a directory (not a file), as TFVC creates them automatically when files are added.
         if os.path.isdir(source_file):
-            # This is a directory - TFS will create it automatically when we add files to it
-            print(f"\033[1;33m[INFO] Skipping directory (will be created automatically): {source_file}\033[0m")
-            return True
+            print(f"\033[1m[INFO] Skipping directory (will be created automatically by TFVC): '{source_file}'\033[0m")
+            return ('skipped', True)
         
-        # Check if source file exists
+        # Checks whether the source file exists before trying to copy it.
         if not os.path.exists(source_file):
-            print(f"\033[1;38;5;214m[WARNING] Source file not found: {source_file}\033[0m")
-            return False
+            print(f"\033[1;38;5;214m[WARNING] Source file not found: '{source_file}'\033[0m")
+            return ('failed', False)
         
-        # Ensure target directory exists
+        # Ensures target directory exists.
         target_dir = os.path.dirname(target_file)
-        os.makedirs(target_dir, exist_ok=True)
+        os.makedirs(target_dir, exist_ok=True) # 'exist_ok=True' means "do not error if directories already exist".
         
-        # Copy the file
+        # Copies the file.
         shutil.copy2(source_file, target_file)
-        print(f"\033[1;32m[SUCCESS] Copied: {os.path.basename(source_file)}\033[0m")
+        print(f"\033[1m[SUCCESS] Successfully copied '{os.path.basename(source_file)}'.\033[0m")
         
-        # Add to TFS
+        # Adds the file to TFVC.
         result = execute_tf_command(f'add "{target_file}" /noprompt')
+
         if result:
-            print(f"\033[1;32m[SUCCESS] Added to TFS: {os.path.basename(target_file)}\033[0m")
-            return True
+            # Checks whether the file was actually added or already tracked.
+            if isinstance(result, dict) and result.get('status') == 'already_tracked':
+                print(f"\033[1m[INFO] '{os.path.basename(target_file)}' is already tracked by TFVC.\033[0m")
+                return ('already_tracked', True)
+            
+            else:
+                print(f"\033[1m[SUCCESS] Successfully added '{os.path.basename(target_file)}' to TFVC.\033[0m")
+                return ('success', True)
+        
         else:
-            print(f"\033[1;38;5;214m[WARNING] Failed to add to TFS: {target_file}\033[0m")
-            return False
+            print(f"\033[1;38;5;214m[WARNING] Failed to add '{target_file}' to TFVC.\033[0m")
+            return ('failed', False)
             
     except Exception as e:
-        print(f"\033[1;31m[ERROR] Failed to copy and add file {source_file}: {e}\033[0m")
-        return False
+        print(f"\n\033[1;31m[ERROR] Failed to copy and add '{source_file}': {e}\033[0m")
+        return ('failed', False)
     
 def checkout_and_update_file(source_file, target_file, server_path):
     """

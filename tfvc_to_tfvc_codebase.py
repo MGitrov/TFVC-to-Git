@@ -558,59 +558,70 @@ def process_changeset_operations(operations, changeset_id):
         print(f"\033[1;31m[ERROR] Failed during targeted processing: {e}\033[0m")
         return False
 
-def convert_server_path_to_local(server_path):
+def convert_server_path_to_target_local(server_path):
     """
-    Converts TFS server path ($/Project/File.cs) to local target path.
-    Example: $/SoftwareDev/Source/Common/File.cs -> P:\Work\Migration\TargetTestPath\Source\Common\File.cs
+    This function converts TFS server paths (e.g. $/Project/File.cs) into local file system paths (e.g. P:\Work\Migration\TargetTestPath\Project\File.cs) for the target workspace.
     """
     try:
-        # Remove the leading $/ and convert to relative path from server root
+        # Verifies this is a valid TFS server path.
         if server_path.startswith('$/'):
-            # Extract path relative to the source server path
-            # server_path: $/SoftwareDev/Source/Common/Licensing/File.cs
-            # source_server_path: $/SoftwareDev/Source
-            # Result should be: Common/Licensing/File.cs
+            # Extracts path relative to the source server path.
+            # For example:
+            # server_path: "$/SoftwareDev/Source/Common/Licensing/File.cs"
+            # source_server_path: "$/SoftwareDev/Source"
+            # relative_path: "Common/Licensing/File.cs"
             
             if server_path.startswith(source_server_path):
                 relative_path = server_path[len(source_server_path):].lstrip('/')
+
             else:
-                # Fallback: just remove the $/ prefix
+                # Removes just the "$/" prefix if the server path does not start with "source_server_path".
                 relative_path = server_path[2:].lstrip('/')
             
-            # Convert forward slashes to OS-appropriate separators
+            # Converts forward slashes to operation system's appropriate separators.
             relative_path = relative_path.replace('/', os.sep)
             
-            # Combine with local target path
+            # Builds final path.
+            # For example:
+            # local_target_path: "P:\Work\Migration\TargetTestPath"
+            # relative_path: "Common\Licensing\File.cs"
+            # Final path: "P:\Work\Migration\TargetTestPath\Common\Licensing\File.cs"
             return os.path.join(local_target_path, relative_path)
+        
         else:
             return server_path
+        
     except Exception as e:
-        print(f"\033[1;31m[ERROR] Path conversion failed for {server_path}: {e}\033[0m")
+        print(f"\n\033[1;31m[ERROR] Path conversion failed for '{server_path}': {e}\033[0m")
         return server_path
 
 def convert_server_path_to_source_local(server_path):
     """
-    Converts TFS server path to source local path for copying.
-    Example: $/SoftwareDev/Source/Common/File.cs -> P:\Work\Migration\SourceTestPath\SoftwareDev\Source\Common\File.cs
+    This function converts TFS server paths (e.g. $/Project/File.cs) into local file system paths (e.g. P:\Work\Migration\TargetTestPath\Project\File.cs) for the source workspace.
     """
     try:
-        # Remove the leading $/ and convert to relative path
+        # Verifies this is a valid TFS server path.
         if server_path.startswith('$/'):
             if server_path.startswith(source_server_path):
                 relative_path = server_path[len(source_server_path):].lstrip('/')
+
             else:
-                # Fallback: just remove the $/ prefix
                 relative_path = server_path[2:].lstrip('/')
             
-            # Convert forward slashes to OS-appropriate separators
             relative_path = relative_path.replace('/', os.sep)
             
-            # Combine with local source path
+            # Builds final path.
+            # For example:
+            # local_source_path: "P:\Work\Migration\SourceTestPath"
+            # relative_path: "Common\Licensing\File.cs"
+            # Final path: "P:\Work\Migration\SourceTestPath\Common\Licensing\File.cs"
             return os.path.join(local_source_path, relative_path)
+        
         else:
             return server_path
+        
     except Exception as e:
-        print(f"\033[1;31m[ERROR] Source path conversion failed for {server_path}: {e}\033[0m")
+        print(f"\n\033[1;31m[ERROR] Path conversion failed for '{server_path}': {e}\033[0m")
         return server_path
 
 def copy_and_add_file(source_file, target_file, server_path):

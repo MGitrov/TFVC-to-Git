@@ -719,153 +719,166 @@ def delete_file(server_path):
         return False
 
 def process_regular_changeset(changeset_id):
-    """
-    This function processes a regular (non-branch creation) changeset.
+   """
+   This function processes a regular (non-branch creation) changeset.
 
-    • For each changeset, the function gets the specific changeset from the source repository and check it into the target repository.
-    """
-    print("\n" + "\033[1m-\033[0m" * 100)
-    print(f"\033[1mPROCESSING REGULAR CHANGESET {changeset_id}\033[0m")
-    print("\033[1m-\033[0m" * 100)
+   • For each changeset, the function gets the specific changeset from the source repository and check it into the target repository.
+   """
+   print("\n" + "\033[1m-\033[0m" * 100)
+   print(f"\033[1mPROCESSING REGULAR CHANGESET {changeset_id}\033[0m")
+   print("\033[1m-\033[0m" * 100)
 
-    # Step 1: Fetches the information about the current processed changeset to use later in check-in.
-    print(f"\n\033[1m[INFO] Fetching changeset details...\033[0m")
-    changeset_details = execute_tf_command(
-        f"changeset {changeset_id} /collection:{source_collection} /noprompt"
-    )
+   # Step 1: Fetches the information about the current processed changeset to use later in check-in.
+   print(f"\n\033[1m[INFO] Fetching changeset details...\033[0m")
+   changeset_details = execute_tf_command(
+       f"changeset {changeset_id} /collection:{source_collection} /noprompt"
+   )
 
-    # Analyze changeset before processing
-    print(f"\n\033[1m[ANALYSIS] Analyzing changeset {changeset_id}...\033[0m")
-    operations = analyze_changeset(changeset_details, changeset_id)
+   # Analyze changeset before processing
+   print(f"\n\033[1m[ANALYSIS] Analyzing changeset {changeset_id}...\033[0m")
+   operations = analyze_changeset(changeset_details, changeset_id)
 
-    comment_match = re.search(r"Comment:\s*(.*?)(?:\r?\n\r?\n|\r?\n$|$)", changeset_details, re.DOTALL) # Extracts the comment for use in the changeset's check-in.
+   # Extract comment and user information
+   comment_match = re.search(r"Comment:\s*(.*?)(?:\r?\n\r?\n|\r?\n$|$)", changeset_details, re.DOTALL)
+   user_match = re.search(r"User:\s*(.*?)(?:\r?\n)", changeset_details)
 
-    if comment_match:
-        original_comment = comment_match.group(1).strip()
-        new_comment = f"Migrated from changeset no. {changeset_id}: {original_comment}" # Prepends a note that this is a migrated changeset.
+   # Build the comment with user information
+   if comment_match:
+       original_comment = comment_match.group(1).strip()
+   else:
+       original_comment = ""
+   
+   if user_match:
+       original_user = user_match.group(1).strip()
+       if original_comment:
+           new_comment = f"Migrated from changeset no. {changeset_id}: {original_comment} ({original_user})"
+       else:
+           new_comment = f"Migrated from changeset no. {changeset_id} ({original_user})"
+   else:
+       if original_comment:
+           new_comment = f"Migrated from changeset no. {changeset_id}: {original_comment}"
+       else:
+           new_comment = f"Migrated from changeset no. {changeset_id}"
 
-    else:
-        new_comment = f"Migrated from changeset no. {changeset_id}"
+   # Step 2: Downloads the exact state of files as they were in the current processed changeset.
+   print(f"\n\033[1m[INFO] Fetching the state of the changeset...\033[0m")
+   print(f"\033[1m[PROGRESS] Starting file download from changeset {changeset_id}...\033[0m")
 
-    # Step 2: Downloads the exact state of files as they were in the current processed changeset.
-    print(f"\n\033[1m[INFO] Fetching the state of the changeset...\033[0m")
-    print(f"\033[1m[PROGRESS] Starting file download from changeset {changeset_id}...\033[0m")
+   os.chdir(local_source_path)
+   print(f"Current working directory: {os.getcwd()}\n")
 
-    os.chdir(local_source_path)
-    print(f"Current working directory: {os.getcwd()}\n")
+   get_result = execute_tf_command(
+       f"get \"{source_server_path}\" /version:C{changeset_id} /recursive /force"
+   )
 
-    get_result = execute_tf_command(
-        f"get \"{source_server_path}\" /version:C{changeset_id} /recursive /force"
-    )
+   if not get_result:
+       print(f"\033[1;31m[ERROR] Failed to fetch the state of the changeset.\033[0m")
+       return False
+   
+   print(f"\033[1m[PROGRESS] File download completed successfully.\033[0m")
 
-    if not get_result:
-        print(f"\033[1;31m[ERROR] Failed to fetch the state of the changeset.\033[0m")
-        return False
-    
-    print(f"\033[1m[PROGRESS] File download completed successfully.\033[0m")
+   # Step 3 & 4: Process files based on operations (targeted approach)
+   print(f"\n\033[1m[INFO] Processing changeset operations...\033[0m")
+   
+   os.chdir(local_target_path)
+   print(f"Current working directory: {os.getcwd()}\n")
+   
+   if operations:
+       # Use targeted approach - process only changed files
+       print(f"\033[1m[PROGRESS] Using targeted processing for {len(operations)} operations...\033[0m")
+       
+       # Clean up any existing pending changes first
+       cleanup_pending_changes()
+       
+       success = process_changeset_operations(operations)
+       if not success:
+           print(f"\033[1;31m[ERROR] Failed to process changeset operations, falling back to bulk processing.\033[0m")
+           # Fall back to original approach
+           operations = []
+   
+   if not operations:
+       # Fall back to original bulk approach
+       print(f"\033[1m[PROGRESS] Using bulk processing approach...\033[0m")
+       
+       # Step 3: Copies files and directories from the source local path to the local target path.
+       print(f"\n\033[1m[INFO] Copying all files to '{local_target_path}' (local target path)...\033[0m")
+       print(f"\033[1m[PROGRESS] Starting file copy operation...\033[0m")
+       copy_files_recursively(local_source_path, local_target_path)
+       print(f"\033[1m[PROGRESS] File copy operation completed.\033[0m")
 
-    # Step 3 & 4: Process files based on operations (targeted approach)
-    print(f"\n\033[1m[INFO] Processing changeset operations...\033[0m")
-    
-    os.chdir(local_target_path)
-    print(f"Current working directory: {os.getcwd()}\n")
-    
-    if operations:
-        # Use targeted approach - process only changed files
-        print(f"\033[1m[PROGRESS] Using targeted processing for {len(operations)} operations...\033[0m")
-        
-        # Clean up any existing pending changes first
-        cleanup_pending_changes()
-        
-        success = process_changeset_operations(operations)
-        if not success:
-            print(f"\033[1;31m[ERROR] Failed to process changeset operations, falling back to bulk processing.\033[0m")
-            # Fall back to original approach
-            operations = []
-    
-    if not operations:
-        # Fall back to original bulk approach
-        print(f"\033[1m[PROGRESS] Using bulk processing approach...\033[0m")
-        
-        # Step 3: Copies files and directories from the source local path to the local target path.
-        print(f"\n\033[1m[INFO] Copying all files to '{local_target_path}' (local target path)...\033[0m")
-        print(f"\033[1m[PROGRESS] Starting file copy operation...\033[0m")
-        copy_files_recursively(local_source_path, local_target_path)
-        print(f"\033[1m[PROGRESS] File copy operation completed.\033[0m")
+       # Step 4: Stages all files for check-in.
+       print("\n\033[1m[INFO] Staging all files for check-in...\033[0m")
+       print(f"\033[1m[PROGRESS] Starting add operation...\033[0m")
 
-        # Step 4: Stages all files for check-in.
-        print("\n\033[1m[INFO] Staging all files for check-in...\033[0m")
-        print(f"\033[1m[PROGRESS] Starting add operation...\033[0m")
+       add_result = execute_tf_command("add * /recursive /noprompt")
 
-        add_result = execute_tf_command("add * /recursive /noprompt")
+       if not add_result:
+           print("\033[1;38;5;214m[WARNING] Failed to add files.\033[0m")
+       else:
+           print(f"\033[1m[PROGRESS] Add operation completed.\033[0m")
 
-        if not add_result:
-            print("\033[1;38;5;214m[WARNING] Failed to add files.\033[0m")
-        else:
-            print(f"\033[1m[PROGRESS] Add operation completed.\033[0m")
+       # Step 4.5: Resolves any conflicts that may have been triggered by the 'add' operation.
+       print("\n\033[1m[INFO] Resolving any conflicts...\033[0m")
+       print(f"\033[1m[PROGRESS] Starting conflict resolution (KeepYours/Recursive)...\033[0m")
 
-        # Step 4.5: Resolves any conflicts that may have been triggered by the 'add' operation.
-        print("\n\033[1m[INFO] Resolving any conflicts...\033[0m")
-        print(f"\033[1m[PROGRESS] Starting conflict resolution (KeepYours/Recursive)...\033[0m")
+       resolve_result = execute_tf_command("resolve /auto:KeepYours /recursive")
 
-        resolve_result = execute_tf_command("resolve /auto:KeepYours /recursive")
+       if not resolve_result:
+           print("\033[1;38;5;214m[WARNING] No conflicts to resolve or resolve command failed.\033[0m")
+       else:
+           print(f"\033[1m[PROGRESS] Conflict resolution completed.\033[0m")
 
-        if not resolve_result:
-            print("\033[1;38;5;214m[WARNING] No conflicts to resolve or resolve command failed.\033[0m")
-        else:
-            print(f"\033[1m[PROGRESS] Conflict resolution completed.\033[0m")
+   # Verifies files were successfully staged for check-in.
+   final_status = execute_tf_command("status")
 
-    # Verifies files were successfully staged for check-in.
-    final_status = execute_tf_command("status")
+   if "There are no pending changes" in final_status:
+       print("\n\033[1;38;5;214m[WARNING] No pending changes detected after adding files, please verify results.\033[0m")
+       return False
 
-    if "There are no pending changes" in final_status:
-        print("\n\033[1;38;5;214m[WARNING] No pending changes detected after adding files, please verify results.\033[0m")
-        return False
+   # Step 5: Checks-in the changeset with retry logic for conflicts.
+   print(f"\n\033[1m[INFO] Checking in changeset with the following comment: '{new_comment}'\033[0m")
+   print(f"\033[1m[PROGRESS] Starting check-in process...\033[0m")
 
-    # Step 5: Checks-in the changeset with retry logic for conflicts.
-    print(f"\n\033[1m[INFO] Checking in changeset with the following comment: '{new_comment}'\033[0m")
-    print(f"\033[1m[PROGRESS] Starting check-in process...\033[0m")
-
-    max_retries = 3
-    retry_count = 0
-    
-    while retry_count <= max_retries:
-        print(f"\033[1m[PROGRESS] Check-in attempt {retry_count + 1}/{max_retries + 1}...\033[0m")
-        
-        checkin_result = execute_tf_command(
-            f"checkin /comment:\"{new_comment}\" /noprompt /recursive /force /noautoresolve",
-            capture_output=False
-        )
-        
-        if checkin_result:
-            # Check-in was successful
-            print(f"\n\033[1;32m[SUCCESS] Successfully processed changeset no. {changeset_id}.\033[0m")
-            return True
-        
-        # Check-in failed
-        print(f"\n\033[1;38;5;214m[WARNING] Check-in attempt {retry_count + 1} failed.\033[0m")
-        
-        if retry_count < max_retries:
-            print(f"\033[1m[INFO] Resolving conflicts and retrying check-in... (Attempt {retry_count + 2}/{max_retries + 1})\033[0m")
-            print(f"\033[1m[PROGRESS] Starting retry conflict resolution...\033[0m")
-            
-            # Resolve conflicts again
-            resolve_retry_result = execute_tf_command("resolve /auto:KeepYours /recursive")
-            
-            if not resolve_retry_result:
-                print("\033[1;38;5;214m[WARNING] No conflicts to resolve or resolve command failed during retry.\033[0m")
-            else:
-                print(f"\033[1m[PROGRESS] Retry conflict resolution completed.\033[0m")
-            
-            retry_count += 1
-        else:
-            # Max retries reached
-            print(f"\n\033[1;31m[ERROR] Failed to check-in the changeset after {max_retries + 1} attempts.\033[0m")
-            return False
-    
-    # This should not be reached, but just in case
-    print(f"\n\033[1;31m[ERROR] Failed to check-in the changeset.\033[0m")
-    return False
+   max_retries = 3
+   retry_count = 0
+   
+   while retry_count <= max_retries:
+       print(f"\033[1m[PROGRESS] Check-in attempt {retry_count + 1}/{max_retries + 1}...\033[0m")
+       
+       checkin_result = execute_tf_command(
+           f"checkin /comment:\"{new_comment}\" /noprompt /recursive /force /noautoresolve",
+           capture_output=False
+       )
+       
+       if checkin_result:
+           # Check-in was successful
+           print(f"\n\033[1;32m[SUCCESS] Successfully processed changeset no. {changeset_id}.\033[0m")
+           return True
+       
+       # Check-in failed
+       print(f"\n\033[1;38;5;214m[WARNING] Check-in attempt {retry_count + 1} failed.\033[0m")
+       
+       if retry_count < max_retries:
+           print(f"\033[1m[INFO] Resolving conflicts and retrying check-in... (Attempt {retry_count + 2}/{max_retries + 1})\033[0m")
+           print(f"\033[1m[PROGRESS] Starting retry conflict resolution...\033[0m")
+           
+           # Resolve conflicts again
+           resolve_retry_result = execute_tf_command("resolve /auto:KeepYours /recursive")
+           
+           if not resolve_retry_result:
+               print("\033[1;38;5;214m[WARNING] No conflicts to resolve or resolve command failed during retry.\033[0m")
+           else:
+               print(f"\033[1m[PROGRESS] Retry conflict resolution completed.\033[0m")
+           
+           retry_count += 1
+       else:
+           # Max retries reached
+           print(f"\n\033[1;31m[ERROR] Failed to check-in the changeset after {max_retries + 1} attempts.\033[0m")
+           return False
+   
+   # This should not be reached, but just in case
+   print(f"\n\033[1;31m[ERROR] Failed to check-in the changeset.\033[0m")
+   return False
 
 def copy_files_recursively(source_local_directory, target_local_directory):
     """

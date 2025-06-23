@@ -143,7 +143,7 @@ def execute_tf_command(command, capture_output=True):
                     print(f"\033[1;38;5;214m[WARNING] Output: {e.stderr}\033[0m\n")
                 return None
         else:
-            # Handle other types of errors normally
+            # Handles other types of errors normally.
             print(f"\n\033[1;31m[ERROR] An error occurred while executing the 'tf' command: {e}\033[0m")
             
             if capture_output:
@@ -277,7 +277,7 @@ def get_changeset_operations(changeset_details):
                     operation = parts[0].lower().strip()
                     file_path = ' '.join(parts[1:]).strip()  # Join in case path has spaces
                     
-                    # Clean TFS version notation (e.g., ;X2, ;C123) from file paths
+                    # Removes TFS' version notation (e.g., ;X2, ;C123) from file paths.
                     if ';' in file_path:
                         file_path = file_path.split(';')[0]
                     
@@ -294,39 +294,38 @@ def get_changeset_operations(changeset_details):
 
 def analyze_changeset(changeset_details, changeset_id):
     """
-    Analyzes changeset details to provide insights about file count, types, and potential issues.
+    This function parses changeset details and provides insights about file count, types, potential issues, etc.
     """
     try:
-        # Get the actual operations from the changeset
+        # Extracts the file operations from the changeset details.
         operations = get_changeset_operations(changeset_details)
         
-        # Analyze the operations
+        # Categorizes all file operations by type.
         total_files = len(operations)
         add_operations = len([op for op, path in operations if op == 'add'])
         edit_operations = len([op for op, path in operations if op == 'edit'])
         delete_operations = len([op for op, path in operations if op == 'delete'])
         other_operations = total_files - add_operations - edit_operations - delete_operations
         
-        # Analyze file types from operations
         file_extensions = {}
         large_paths = []
         
         for operation, file_path in operations:
-            # Check for long paths (potential issue)
+            # Long paths (>200 characters) might cause Windows/TFS issues.
             if len(file_path) > 200:
                 large_paths.append(file_path)
             
-            # Extract file extension more robustly
+            # Extracts and cleans file extensions by removing non-alphanumeric characters.
             if '.' in file_path:
-                # Get the last extension, but clean it up
-                ext = file_path.split('.')[-1].lower()
-                # Remove any non-alphanumeric characters that might cause issues
-                ext = ''.join(c for c in ext if c.isalnum())
-                if ext:  # Only count if we have a valid extension
-                    file_extensions[ext] = file_extensions.get(ext, 0) + 1
+                extension = file_path.split('.')[-1].lower()
+                extension = ''.join(c for c in extension if c.isalnum())
+
+                # Only valid extensions are counted.
+                if extension:
+                    file_extensions[extension] = file_extensions.get(extension, 0) + 1
         
-        # Display analysis
-        print(f"\033[1;36m[ANALYSIS] Changeset {changeset_id} Summary:\033[0m")
+        # Displays comprehensive analysis.
+        print(f"\n\033[1m[ANALYSIS] Changeset {changeset_id} Summary:\033[0m")
         print(f"  • Total operations: {total_files}")
         print(f"  • Add operations: {add_operations}")
         print(f"  • Edit operations: {edit_operations}")
@@ -335,45 +334,55 @@ def analyze_changeset(changeset_details, changeset_id):
         
         if file_extensions:
             print(f"  • File types:")
-            # Show top 10 most common extensions
+            # Shows top 10 most common file types.
             sorted_extensions = sorted(file_extensions.items(), key=lambda x: x[1], reverse=True)[:10]
-            for ext, count in sorted_extensions:
-                print(f"    - .{ext}: {count} files")
+
+            for extension, count in sorted_extensions:
+                print(f"    - .{extension}: {count} files")
         
         if large_paths:
-            print(f"  • \033[1;33mWarning: {len(large_paths)} files with very long paths (>200 chars)\033[0m")
-            for path in large_paths[:3]:  # Show first 3 examples
+            print(f"  • \033[1;38;5;214m[WARNING] Found {len(large_paths)} files with very long paths (>200 characters) for changeset #{changeset_id} (3 examples):\033[0m")
+            # Shows first 3 examples (truncated to 100 characters)
+            for path in large_paths[:3]:
                 print(f"    - {path[:100]}...")
         
-        # Show some example operations
         if operations:
             print(f"  • Example operations:")
-            for i, (op, path) in enumerate(operations[:5]):  # Show first 5
-                short_path = path.split('/')[-1] if '/' in path else path  # Just filename
-                print(f"    - {op}: {short_path}")
+            # Shows first 5 operations as examples.
+            for i, (op, path) in enumerate(operations[:5]):
+                short_path = path.split('/')[-1] if '/' in path else path  # Displays just the filename (not full path) for readability.
+                print(f"    - {op}: '{short_path}'")
+
             if len(operations) > 5:
-                print(f"    - ... and {len(operations) - 5} more")
+                print(f"    - ... and {len(operations) - 5} more.")
         
-        # Potential risk assessment
+        # Risk assessment.
         risk_factors = []
+
+        # Large changesets will cause longer processing time.
         if total_files > 1000:
-            risk_factors.append(f"Large changeset ({total_files} files)")
+            risk_factors.append(f"\033[1;38;5;214mLarge changeset ({total_files} files)")
+
+        # Many adds might cause potential conflicts with existing files.
         if add_operations > 500:
-            risk_factors.append(f"Many new files ({add_operations} adds)")
+            risk_factors.append(f"\033[1;38;5;214mMany new files ({add_operations} adds)")
+
+        # Long paths might cause issues because of Windows/TFS path limit.
         if len(large_paths) > 0:
-            risk_factors.append(f"Long file paths ({len(large_paths)} files)")
+            risk_factors.append(f"\033[1;38;5;214mLong file paths ({len(large_paths)} files)")
         
         if risk_factors:
-            print(f"  • \033[1;33mPotential risks: {', '.join(risk_factors)}\033[0m")
+            print(f"  • \033[1;38;5;214m[WARNING] Potential risks for changeset #{changeset_id}: {', '.join(risk_factors)}\033[0m")
+
         else:
-            print(f"  • \033[1;32mNo obvious risk factors detected\033[0m")
+            print(f"  • \033[1m[INFO]No obvious risk factors detected for changeset #{changeset_id}.\033[0m")
         
-        return operations  # Return operations for use in processing
+        return operations
             
     except Exception as e:
-        print(f"\033[1;31m[ERROR] Failed to analyze changeset: {e}\033[0m")
-        print(f"\033[1;33m[INFO] Proceeding with migration anyway...\033[0m")
-        return []  # Return empty list to fall back to bulk processing
+        print(f"\033[1;31m[ERROR] Failed to analyze changeset #{changeset_id}: {e}\033[0m")
+        print(f"\033[1m[INFO] Proceeding with the migration regardless...\033[0m")
+        return []
 
 def cleanup_pending_changes():
     """
@@ -735,7 +744,7 @@ def process_regular_changeset(changeset_id):
    )
 
    # Analyze changeset before processing
-   print(f"\n\033[1m[ANALYSIS] Analyzing changeset {changeset_id}...\033[0m")
+   #print(f"\n\033[1m[ANALYSIS] Analyzing changeset {changeset_id}...\033[0m")
    operations = analyze_changeset(changeset_details, changeset_id)
 
    # Extract comment and user information

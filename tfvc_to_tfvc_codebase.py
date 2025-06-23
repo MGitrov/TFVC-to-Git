@@ -327,12 +327,14 @@ def analyze_changeset(changeset_details, changeset_id):
                     file_extensions[extension] = file_extensions.get(extension, 0) + 1
         
         # Displays comprehensive analysis.
+        print(f"\n" + "\033[1m*\033[0m" * 80)
         print(f"\n\033[1m[ANALYSIS] Changeset {changeset_id} Summary:\033[0m")
         print(f"  • Total operations: {total_files}")
         print(f"  • Add operations: {add_operations}")
         print(f"  • Edit operations: {edit_operations}")
         print(f"  • Delete operations: {delete_operations}")
         print(f"  • Other operations: {other_operations}")
+        print(f"\033[1m*\033[0m" * 80)
         
         if file_extensions:
             print(f"  • File types:")
@@ -424,34 +426,33 @@ def process_changeset_operations(operations):
     This function processes each file operation from a changeset individually, rather than using the bulk "copy everything + add everything" approach. In other words, this function checks what operation (e.g. add, edit) has been performed upon each file in the changeset. Reduces unnecessary conflicts and improves performance.
     """
     try:
-        print(f"\033[1m[INFO] Processing {len(operations)} individual operations...\033[0m")
+        print(f"\n\033[1m[INFO] Processing {len(operations)} individual operations...\033[0m")
         
         actual_files_added = 0    # Files that were successfully added to TFS.
         already_tracked_files = 0 # Files that were already tracked (not added again).
         skipped_directories = 0   # Directories that were skipped.
-        edit_count = 0           # Files that were successfully edited.
-        other_count = 0          # Other operations (delete, etc).
-        failed_operations = 0    # Operations that failed.
+        edit_count = 0            # Files that were successfully edited.
+        other_count = 0           # Other operations (delete, etc).
+        failed_operations = 0     # Operations that failed.
         
         # Iterates through each operation from the changeset one by one.
         for index, (operation, file_path) in enumerate(operations):
             if index < 3:  # Displays detailed information for the first 3 operations to help with debugging.
-                print(f"\033[1m[DEBUG] Operation {index+1}: {operation} {file_path}\033[0m")
+                print(f"\n\033[1;36m[DEBUG] Operation {index+1}: {operation} {file_path}\033[0m")
+
             else:
                 print(f"\n\033[1m[INFO] Operation {index+1}/{len(operations)}: {operation} {file_path.split('/')[-1]}\033[0m")
             
-            # Convert TFS server path to local path
-            local_file_path = convert_server_path_to_target_local(file_path)
-            source_file_path = convert_server_path_to_source_local(file_path)
+            target_local_file_path = convert_server_path_to_target_local(file_path)
+            source_local_file_path = convert_server_path_to_source_local(file_path)
             
-            if index < 3:  # Show path conversion debug for first 3 operations
+            if index < 3: # Displays path conversion for first 3 operations to help with debugging.
                 print(f"\033[1;36m[DEBUG] Server path: {file_path}\033[0m")
-                print(f"\033[1;36m[DEBUG] Source local: {source_file_path}\033[0m")
-                print(f"\033[1;36m[DEBUG] Target local: {local_file_path}\033[0m")
+                print(f"\033[1;36m[DEBUG] Source local file path: {source_local_file_path}\033[0m")
+                print(f"\033[1;36m[DEBUG] Target local file path: {target_local_file_path}\033[0m")
             
             if operation == 'add':
-                # Handle new file or directory
-                status, success = copy_and_add_file(source_file_path, local_file_path)
+                status, success = copy_and_add_file(source_local_file_path, target_local_file_path)
                 
                 if status == 'success':
                     actual_files_added += 1
@@ -461,40 +462,39 @@ def process_changeset_operations(operations):
                     already_tracked_files += 1
                 elif status == 'failed':
                     failed_operations += 1
-                    print(f"\033[1;38;5;214m[WARNING] Failed to process add operation for {file_path}\033[0m")
                     
             elif operation == 'edit':
-                # Handle modified file
-                if checkout_and_update_file(source_file_path, local_file_path):
+                if checkout_and_update_file(source_local_file_path, target_local_file_path):
                     edit_count += 1
+
                 else:
                     failed_operations += 1
-                    print(f"\033[1;38;5;214m[WARNING] Failed to process edit operation for {file_path}\033[0m")
                     
             elif operation == 'delete':
-                # Handle deleted file
                 if delete_file(file_path):
                     other_count += 1
+
                 else:
                     failed_operations += 1
-                    print(f"\033[1;38;5;214m[WARNING] Failed to process delete operation for {file_path}\033[0m")
             else:
-                print(f"\033[1;33m[INFO] Skipping unsupported operation: {operation} {file_path}\033[0m")
+                print(f"\033[1;38;5;214m[WARNING] Skipping unsupported operation: {operation} '{file_path}'...\033[0m")
                 other_count += 1
         
-        print(f"\033[1;32m[TARGETED] Processing Summary:\033[0m")
-        print(f"  • New files actually added to TFS: {actual_files_added}")
+        print(f"\n" + "\033[1m*\033[0m" * 80)
+        print(f"\033[1;33m[PROCESSING COMPLETED] Processing Summary:\033[0m")
+        print(f"  • New files actually added to TFVC: {actual_files_added}")
         print(f"  • Files already tracked (not added): {already_tracked_files}")
         print(f"  • Directories skipped: {skipped_directories}")
         print(f"  • Edit operations: {edit_count}")
         print(f"  • Other operations: {other_count}")
         print(f"  • Failed operations: {failed_operations}")
-        print(f"\033[1;36m[INFO] Azure DevOps should show: {actual_files_added + edit_count + other_count} file changes\033[0m")
+        print(f"\n\033[1m[INFO] Azure DevOps should show: {actual_files_added + edit_count + other_count} file changes.\033[0m")
+        print(f"\033[1m*\033[0m" * 80)
         
         return True
         
     except Exception as e:
-        print(f"\033[1;31m[ERROR] Failed during targeted processing: {e}\033[0m")
+        print(f"\033[1;31m[ERROR] Failed to process individual operations: {e}\033[0m")
         return False
 
 def convert_server_path_to_target_local(server_path):

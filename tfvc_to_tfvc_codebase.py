@@ -297,6 +297,8 @@ def analyze_changeset(changeset_details, changeset_id):
     This function parses changeset details and provides insights about file count, types, potential issues, etc.
     """
     try:
+        print(f"\n\033[1m[INFO] Analyzing changeset no. {changeset_id}...\033[0m")
+
         # Extracts the file operations from the changeset details.
         operations = get_changeset_operations(changeset_details)
         
@@ -341,7 +343,7 @@ def analyze_changeset(changeset_details, changeset_id):
                 print(f"    - .{extension}: {count} files")
         
         if large_paths:
-            print(f"  • \033[1;38;5;214m[WARNING] Found {len(large_paths)} files with very long paths (>200 characters) for changeset #{changeset_id} (3 examples):\033[0m")
+            print(f"  • \033[1;38;5;214m[WARNING] Found {len(large_paths)} files with very long paths (>200 characters) for changeset no. {changeset_id} (3 examples):\033[0m")
             # Shows first 3 examples (truncated to 100 characters)
             for path in large_paths[:3]:
                 print(f"    - {path[:100]}...")
@@ -372,47 +374,49 @@ def analyze_changeset(changeset_details, changeset_id):
             risk_factors.append(f"\033[1;38;5;214mLong file paths ({len(large_paths)} files)")
         
         if risk_factors:
-            print(f"  • \033[1;38;5;214m[WARNING] Potential risks for changeset #{changeset_id}: {', '.join(risk_factors)}\033[0m")
+            print(f"  • \033[1;38;5;214m[WARNING] Potential risks for changeset no. {changeset_id}: {', '.join(risk_factors)}\033[0m")
 
         else:
-            print(f"  • \033[1m[INFO]No obvious risk factors detected for changeset #{changeset_id}.\033[0m")
+            print(f"  • \033[1m[INFO]No obvious risk factors detected for changeset no. {changeset_id}.\033[0m")
         
         return operations
             
     except Exception as e:
-        print(f"\033[1;31m[ERROR] Failed to analyze changeset #{changeset_id}: {e}\033[0m")
+        print(f"\033[1;31m[ERROR] Failed to analyze changeset no. {changeset_id}: {e}\033[0m")
         print(f"\033[1m[INFO] Proceeding with the migration regardless...\033[0m")
         return []
 
-def cleanup_pending_changes():
+def undo_pending_changes():
     """
-    Cleans up any pending changes that might interfere with the migration.
+    This function undos any pending changes that might interfere with the migration.
     """
     try:
-        print(f"\033[1m[CLEANUP] Checking for existing pending changes...\033[0m")
+        print(f"\n\033[1m[INFO] Checking for any existing pending changes...\033[0m")
         
-        # Check current status
         status_result = execute_tf_command("status", capture_output=True)
         
+        # TFS returns "There are no pending changes" when workspace is clean.
         if status_result and "There are no pending changes" not in status_result:
-            print(f"\033[1;33m[WARNING] Found existing pending changes:\033[0m")
+            print(f"\033[1;38;5;214m[WARNING] Found existing pending changes:\033[0m")
             print(status_result[:500] + "..." if len(status_result) > 500 else status_result)
             
-            # Undo all pending changes
-            print(f"\033[1m[CLEANUP] Undoing all pending changes...\033[0m")
+            # Once any pending changes are found, they are undone.
+            print(f"\033[1m[INFO] Undoing all pending changes...\033[0m")
             undo_result = execute_tf_command("undo * /recursive /noprompt")
             
             if undo_result:
-                print(f"\033[1;32m[CLEANUP] Successfully cleared pending changes.\033[0m")
+                print(f"\033[1;32m[SUCCESS] Successfully undo all pending changes!\033[0m")
+
             else:
                 print(f"\033[1;38;5;214m[WARNING] Failed to undo some pending changes.\033[0m")
+
         else:
-            print(f"\033[1;32m[CLEANUP] No pending changes found.\033[0m")
+            print(f"\033[1m[INFO] No pending changes found.\033[0m")
         
         return True
         
     except Exception as e:
-        print(f"\033[1;31m[ERROR] Failed during cleanup: {e}\033[0m")
+        print(f"\033[1;31m[ERROR] Failed to undo pending changes: {e}\033[0m")
         return False
 
 def process_changeset_operations(operations):
@@ -797,7 +801,7 @@ def process_regular_changeset(changeset_id):
        print(f"\033[1m[PROGRESS] Using targeted processing for {len(operations)} operations...\033[0m")
        
        # Clean up any existing pending changes first
-       cleanup_pending_changes()
+       undo_pending_changes()
        
        success = process_changeset_operations(operations)
        if not success:

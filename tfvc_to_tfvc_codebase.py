@@ -334,7 +334,7 @@ def analyze_changeset(changeset_details, changeset_id):
         print(f"  • Edit operations: {edit_operations}")
         print(f"  • Delete operations: {delete_operations}")
         print(f"  • Other operations: {other_operations}")
-        print(f"\033[1m*\033[0m" * 80)
+        print(f"\033[1m*\n\033[0m" * 80)
         
         if file_extensions:
             print(f"  • File types:")
@@ -565,7 +565,7 @@ def convert_server_path_to_source_local(server_path):
 
 def copy_and_add_file(source_file, target_file):
     """
-    This function copies file from the source location to the target location, and adds it to TFVC.
+    This function copies file from the source workspace to the target workspace, and adds it to TFVC.
     """
     try:
         # Checks whether the source path is a directory (not a file), as TFVC creates them automatically when files are added.
@@ -584,96 +584,103 @@ def copy_and_add_file(source_file, target_file):
         
         # Copies the file.
         shutil.copy2(source_file, target_file)
-        print(f"\033[1m[SUCCESS] Successfully copied '{os.path.basename(source_file)}'.\033[0m")
+        print(f"\033[1;32m[SUCCESS] Successfully copied '{os.path.basename(source_file)}'!\033[0m")
         
-        # Check for potential path length issues
+        # Checks for Windows path length limitations (260 characters). Long paths can cause issues in Windows/TFS environments.
         if len(target_file) > 260:
-            print(f"\033[1;33m[WARNING] Path length ({len(target_file)} chars) may cause issues: '{target_file}'\033[0m")
+            print(f"\033[1;38;5;214m[WARNING] Path length ({len(target_file)} characters) can cause issues: '{target_file}'\033[0m")
         
-        # Additional file existence verification before TFS add
+        # Verifies once again copied file existence before adding to TFVC.
         if not os.path.exists(target_file):
-            print(f"\033[1;31m[ERROR] File disappeared after copy: '{target_file}'\033[0m")
+            print(f"\n\033[1;31m[ERROR] File not found after copy: '{target_file}'\033[0m")
             return ('failed', False)
         
-        # Additional diagnostics for TFS add failures
+        # Additional diagnostics in order to catch any failures.
+        print(f"\n" + "\033[1m*\033[0m" * 80)
         print(f"\033[1;36m[DEBUG] About to add file: '{target_file}'\033[0m")
-        print(f"\033[1;36m[DEBUG] File exists: {os.path.exists(target_file)}\033[0m")
+        print(f"\033[1;36m[DEBUG] File exists in target workspace: {os.path.exists(target_file)}\033[0m")
         print(f"\033[1;36m[DEBUG] Current working directory: {os.getcwd()}\033[0m")
         print(f"\033[1;36m[DEBUG] Path length: {len(target_file)} characters\033[0m")
+        print(f"\033[1m*\n\033[0m" * 80)
         
-        # Adds the file to TFVC with special handling for files starting with dot
+        # Adds the file to TFVC with special handling for files starting with ".".
         filename = os.path.basename(target_file)
+
+        # Files starting with "." can be problematic for TFVC.
         if filename.startswith('.'):
-            # Handle files starting with dot (like .npmignore, .gitignore) - these can be problematic for TFS
-            print(f"\033[1;33m[INFO] Handling special file with leading dot: '{filename}'\033[0m")
+            print(f"\033[1m[INFO] Handling file with leading dot: '{filename}'\033[0m")
             
-            # Try method 1: Use /recursive flag
+            # Method 1: Uses "/recursive" flag.
             result = execute_tf_command(f'add "{target_file}" /recursive /noprompt')
             
-            # Try method 2: Add from the file's directory if method 1 fails
+            # Method 2: Adds the file from its parent directory.
             if not result:
-                print(f"\033[1;33m[INFO] First method failed, trying alternative approach for '{filename}'\033[0m")
+                print(f"\033[1m[INFO] First method failed, trying alternative approach for '{filename}'...\033[0m")
                 current_dir = os.getcwd()
+
                 try:
                     os.chdir(target_dir)
                     result = execute_tf_command(f'add "{filename}" /noprompt')
+                    
                 finally:
                     os.chdir(current_dir)
             
-            # Final fallback: if TFS still can't add the file, skip it gracefully
+            # Skips file if both methods fail.
             if not result:
-                print(f"\033[1;38;5;214m[WARNING] TFVC cannot handle file '{filename}' - skipping to continue migration.\033[0m")
+                print(f"\033[1;38;5;214m[WARNING] TFVC cannot handle file '{filename}'; skipping to continue migration...\033[0m")
                 return ('skipped', True)  # Treat as skipped rather than failed
+            
         else:
-            # Standard add for normal files - but use directory-based approach as workaround for workspace issues
-            print(f"\033[1;33m[INFO] Using directory-based add as workaround for workspace issues\033[0m")
+            # Uses directory-based approach as workaround for workspace issues for all other files.
+            print(f"\033[1m[INFO] Using directory-based add...\033[0m")
             current_dir = os.getcwd()
+
             try:
                 os.chdir(target_dir)
-                print(f"\033[1;36m[DEBUG] Changed to directory: {os.getcwd()}\033[0m")
+                print(f"\033[1;36m[DEBUG] Changed directory to: '{os.getcwd()}'\033[0m")
                 result = execute_tf_command(f'add "{filename}" /noprompt')
+
             finally:
                 os.chdir(current_dir)
             
-            # If directory-based also fails, try original approach
+            # If directory-based approach fails, falls back to original full path approach.
             if not result:
-                print(f"\033[1;33m[INFO] Directory-based add failed, trying original full-path approach\033[0m")
+                print(f"\033[1m[INFO] Directory-based add failed, trying original full path approach...\033[0m")
                 result = execute_tf_command(f'add "{target_file}" /noprompt')
 
-        # Enhanced validation: Check if file was actually staged
+        # Verifies that the file was added to TFVC.
         if result:
-            # Debug: Show current working directory when TFS commands are executed
-            print(f"\033[1;36m[DEBUG] Current working directory during tf add: {os.getcwd()}\033[0m")
-            print(f"\033[1;36m[DEBUG] Target file path: {target_file}\033[0m")
+            print(f"\033[1;36m[DEBUG] Current working directory during 'tf add' command execution: '{os.getcwd()}'\033[0m")
             
-            # Verify the file is actually pending by checking TFS status
-            print(f"\033[1;36m[DEBUG] Verifying '{filename}' was actually staged...\033[0m")
+            print(f"\033[1;36m[DEBUG] Verifying '{filename}' was added to TFVC...\033[0m")
             status_check = execute_tf_command(f'status "{target_file}"', capture_output=True)
             
             if status_check and target_file in status_check and "add" in status_check.lower():
-                print(f"\033[1;32m[SUCCESS] Verified '{filename}' is pending for check-in.\033[0m")
-                # Checks whether the file was actually added or already tracked.
+                print(f"\033[1;32m[SUCCESS] '{filename}' is pending for check-in!\033[0m")
+
                 if isinstance(result, dict) and result.get('status') == 'already_tracked':
                     print(f"\033[1m[INFO] '{filename}' is already tracked by TFVC.\033[0m")
                     return ('already_tracked', True)
+                
                 else:
                     return ('success', True)
-            else:
-                print(f"\033[1;38;5;214m[WARNING] '{filename}' was not actually staged (likely workspace/path issue).\033[0m")
-                print(f"\033[1;33m[INFO] Attempting directory-based add for '{filename}'...\033[0m")
                 
-                # Try the same approach that worked manually: change to file's directory
+            else:
+                print(f"\033[1;38;5;214m[WARNING] '{filename}' was not staged.\033[0m")
+                print(f"\033[1m[INFO] Attempting directory-based add for '{filename}'...\033[0m")
+                
                 current_dir = os.getcwd()
+
                 try:
                     os.chdir(target_dir)
-                    print(f"\033[1;36m[DEBUG] Changed to directory: {os.getcwd()}\033[0m")
+                    print(f"\033[1;36m[DEBUG] Changed directory to: '{os.getcwd()}'\033[0m")
                     retry_result = execute_tf_command(f'add "{filename}" /noprompt')
                     
                     if retry_result:
-                        # Verify this retry worked
                         retry_status = execute_tf_command(f'status "{filename}"', capture_output=True)
+
                         if retry_status and "add" in retry_status.lower():
-                            print(f"\033[1;32m[SUCCESS] Successfully staged '{filename}' using directory-based approach.\033[0m")
+                            print(f"\033[1;32m[SUCCESS] Successfully staged '{filename}' using directory-based approach!\033[0m")
                             return ('success', True)
                     
                     print(f"\033[1;38;5;214m[WARNING] Directory-based add also failed for '{filename}'.\033[0m")
@@ -681,8 +688,9 @@ def copy_and_add_file(source_file, target_file):
                     
                 finally:
                     os.chdir(current_dir)
+
         else:
-            print(f"\033[1;38;5;214m[WARNING] Failed to add '{target_file}' to TFVC.\033[0m")
+            print(f"\n\033[1;31m[ERROR] Failed to add '{target_file}' to TFVC.\033[0m")
             return ('failed', False)
             
     except Exception as e:

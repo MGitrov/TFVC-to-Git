@@ -1,3 +1,7 @@
+<div id="header" align="center">
+  <img src="https://github.com/user-attachments/assets/20017939-ce96-4b09-90df-d19a877806a3" width="350"/>
+</div>
+
 - [Introduction](#introduction)
 - [Prerequisites](#prerequisites)
 - [Getting Started](#getting-started-seedling)

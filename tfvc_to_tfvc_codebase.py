@@ -755,77 +755,106 @@ def process_regular_changeset(changeset_id):
        f"changeset {changeset_id} /collection:{source_collection} /noprompt"
    )
 
-   # Analyze changeset before processing
-   #print(f"\n\033[1m[ANALYSIS] Analyzing changeset {changeset_id}...\033[0m")
+   # Analyzes changeset details and provides insights about file count, types, potential issues, etc.
    operations = analyze_changeset(changeset_details, changeset_id)
 
-   # Extract comment and user information
+   # Extracts changeset's comment and user details.
    comment_match = re.search(r"Comment:\s*(.*?)(?:\r?\n\r?\n|\r?\n$|$)", changeset_details, re.DOTALL)
    user_match = re.search(r"User:\s*(.*?)(?:\r?\n)", changeset_details)
 
-   # Build the comment with user information
+   MAX_COMMENT_LENGTH = 2048
+
+   # Builds the new comment for the check-in.
    if comment_match:
        original_comment = comment_match.group(1).strip()
+
+        # Cleans comment to prevent TFS command line issues.
+       original_comment = original_comment.replace('\n', ' ').replace('\r', '')
+       original_comment = ' '.join(original_comment.split()) # Removes extra spaces.
+       original_comment = original_comment.replace('"', "'") # Replaces double quotes with single quotes.
+
    else:
        original_comment = ""
    
    if user_match:
        original_user = user_match.group(1).strip()
+
        if original_comment:
-           new_comment = f"Migrated from changeset no. {changeset_id}: {original_comment} ({original_user})"
+           new_comment = f"#{changeset_id}: {original_comment} ({original_user})"
+           base_part = f"#{changeset_id}: "
+           user_part = f" ({original_user})"
+           available_space = MAX_COMMENT_LENGTH - len(base_part) - len(user_part)
+
+           if len(original_comment) > available_space:
+               truncated_comment = original_comment[:available_space-15] + "...[truncated]"
+               new_comment = f"{base_part}{truncated_comment}{user_part}"
+
+           else:
+               new_comment = f"{base_part}{original_comment}{user_part}"
+               
        else:
-           new_comment = f"Migrated from changeset no. {changeset_id} ({original_user})"
+           new_comment = f"#{changeset_id}: ({original_user})"
+
    else:
        if original_comment:
-           new_comment = f"Migrated from changeset no. {changeset_id}: {original_comment}"
+           base_part = f"#{changeset_id}: "
+           available_space = MAX_COMMENT_LENGTH - len(base_part)
+
+           if len(original_comment) > available_space:
+               truncated_comment = original_comment[:available_space-15] + "...[truncated]"
+               new_comment = f"{base_part}{truncated_comment}"
+
+           else:
+               new_comment = f"{base_part}{original_comment}"
+
        else:
-           new_comment = f"Migrated from changeset no. {changeset_id}"
+           new_comment = f"#{changeset_id}"
 
    # Step 2: Downloads the exact state of files as they were in the current processed changeset.
    print(f"\n\033[1m[INFO] Fetching the state of the changeset...\033[0m")
-   print(f"\033[1m[PROGRESS] Starting file download from changeset {changeset_id}...\033[0m")
+   print(f"\033[1m[PROGRESS] Starting file download from changeset no. {changeset_id}...\033[0m")
 
    os.chdir(local_source_path)
    print(f"Current working directory: {os.getcwd()}\n")
 
    get_result = execute_tf_command(
-       f"get \"{source_server_path}\" /version:C{changeset_id} /recursive /force"
+       f"get \"{source_server_path}\" /version:C{changeset_id} /recursive"
    )
 
    if not get_result:
-       print(f"\033[1;31m[ERROR] Failed to fetch the state of the changeset.\033[0m")
+       print(f"\n\033[1;31m[ERROR] Failed to fetch the state of changeset no. {changeset_id}.\033[0m")
        return False
    
-   print(f"\033[1m[PROGRESS] File download completed successfully.\033[0m")
+   print(f"\033[1;32m[SUCCESS] Successfully downloaded the state of changeset no. {changeset_id}!\033[0m")
 
-   # Step 3 & 4: Process files based on operations (targeted approach)
+   # Steps 3 & 4: Processes files based on operations.
    print(f"\n\033[1m[INFO] Processing changeset operations...\033[0m")
    
    os.chdir(local_target_path)
    print(f"Current working directory: {os.getcwd()}\n")
    
    if operations:
-       # Use targeted approach - process only changed files
-       print(f"\033[1m[PROGRESS] Using targeted processing for {len(operations)} operations...\033[0m")
+       # Uses targeted approach - only changed files are processed.
+       print(f"\n\033[1m[PROGRESS] Using targeted processing for {len(operations)} operations...\033[0m")
        
-       # Clean up any existing pending changes first
+       # Cleans up any existing pending changes first.
        undo_pending_changes()
        
        success = process_changeset_operations(operations)
+
        if not success:
-           print(f"\033[1;31m[ERROR] Failed to process changeset operations, falling back to bulk processing.\033[0m")
-           # Fall back to original approach
+           print(f"\n\033[1;31m[ERROR] Failed to process changeset's no. {changeset_id} operations, falling back to bulk processing.\033[0m")
            operations = []
    
    if not operations:
-       # Fall back to original bulk approach
-       print(f"\033[1m[PROGRESS] Using bulk processing approach...\033[0m")
+       # Falls back to original bulk processing approach.
+       print(f"\n\033[1m[PROGRESS] Using bulk processing approach...\033[0m")
        
        # Step 3: Copies files and directories from the source local path to the local target path.
-       print(f"\n\033[1m[INFO] Copying all files to '{local_target_path}' (local target path)...\033[0m")
+       print(f"\n\033[1m[INFO] Copying ALL files to '{local_target_path}' (local target path)...\033[0m")
        print(f"\033[1m[PROGRESS] Starting file copy operation...\033[0m")
        copy_files_recursively(local_source_path, local_target_path)
-       print(f"\033[1m[PROGRESS] File copy operation completed.\033[0m")
+       print(f"\033[1;32m[SUCCESS] Successfully copied ALL files to '{local_target_path}' (local target path)!\033[0m")
 
        # Step 4: Stages all files for check-in.
        print("\n\033[1m[INFO] Staging all files for check-in...\033[0m")
@@ -835,19 +864,21 @@ def process_regular_changeset(changeset_id):
 
        if not add_result:
            print("\033[1;38;5;214m[WARNING] Failed to add files.\033[0m")
+
        else:
            print(f"\033[1m[PROGRESS] Add operation completed.\033[0m")
 
        # Step 4.5: Resolves any conflicts that may have been triggered by the 'add' operation.
        print("\n\033[1m[INFO] Resolving any conflicts...\033[0m")
-       print(f"\033[1m[PROGRESS] Starting conflict resolution (KeepYours/Recursive)...\033[0m")
+       print(f"\033[1m[PROGRESS] Starting conflict resolution (KeepYours)...\033[0m")
 
        resolve_result = execute_tf_command("resolve /auto:KeepYours /recursive")
 
        if not resolve_result:
            print("\033[1;38;5;214m[WARNING] No conflicts to resolve or resolve command failed.\033[0m")
+
        else:
-           print(f"\033[1m[PROGRESS] Conflict resolution completed.\033[0m")
+           print(f"\033[1;32m[SUCCESS] Successfully resolved conflicts!\033[0m")
 
    # Verifies files were successfully staged for check-in.
    final_status = execute_tf_command("status")
@@ -864,7 +895,7 @@ def process_regular_changeset(changeset_id):
    retry_count = 0
    
    while retry_count <= max_retries:
-       print(f"\033[1m[PROGRESS] Check-in attempt {retry_count + 1}/{max_retries + 1}...\033[0m")
+       print(f"\n\033[1m[PROGRESS] Check-in attempt {retry_count + 1}/{max_retries + 1}...\033[0m")
        
        checkin_result = execute_tf_command(
            f"checkin /comment:\"{new_comment}\" /noprompt /recursive /force /noautoresolve",
@@ -872,32 +903,30 @@ def process_regular_changeset(changeset_id):
        )
        
        if checkin_result:
-           # Check-in was successful
            print(f"\n\033[1;32m[SUCCESS] Successfully processed changeset no. {changeset_id}.\033[0m")
            return True
        
-       # Check-in failed
        print(f"\n\033[1;38;5;214m[WARNING] Check-in attempt {retry_count + 1} failed.\033[0m")
        
        if retry_count < max_retries:
-           print(f"\033[1m[INFO] Resolving conflicts and retrying check-in... (Attempt {retry_count + 2}/{max_retries + 1})\033[0m")
+           print(f"\n\033[1m[INFO] Resolving conflicts and retrying check-in... (attempt {retry_count + 2}/{max_retries + 1})\033[0m")
            print(f"\033[1m[PROGRESS] Starting retry conflict resolution...\033[0m")
            
-           # Resolve conflicts again
            resolve_retry_result = execute_tf_command("resolve /auto:KeepYours /recursive")
            
            if not resolve_retry_result:
                print("\033[1;38;5;214m[WARNING] No conflicts to resolve or resolve command failed during retry.\033[0m")
+
            else:
-               print(f"\033[1m[PROGRESS] Retry conflict resolution completed.\033[0m")
+               print(f"\033[1;32m[SUCCESS] Successfully resolved conflicts!\033[0m")
            
            retry_count += 1
+
        else:
-           # Max retries reached
-           print(f"\n\033[1;31m[ERROR] Failed to check-in the changeset after {max_retries + 1} attempts.\033[0m")
+           # Max retries reachedץ
+           print(f"\n\033[1;31m[ERROR] Failed to check-in the changeset no. {changeset_id} after {max_retries + 1} attempts.\033[0m")
            return False
    
-   # This should not be reached, but just in case
    print(f"\n\033[1;31m[ERROR] Failed to check-in the changeset.\033[0m")
    return False
 

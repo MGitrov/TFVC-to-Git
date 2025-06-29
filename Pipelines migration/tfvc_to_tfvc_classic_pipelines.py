@@ -474,21 +474,24 @@ def update_queue_section(pipeline_json_config, available_pools_map, available_ta
             raise Exception(f"\033[1;31mNo queue found for pool '{source_pool_name}' in '{TARGET_ORGANIZATION}'.\033[0m")
 
     else:
-        # Falls back to a default pool (e.g., "Azure Pipelines").
-        default_pool = next((pool for pool in available_target_pools if pool["name"] == "Azure Pipelines"), None)
+        # Prompts the user to select an agent pool if no matching pool is found.
+        print(f"\033[1;38;5;214m[WARNING] Agent pool '{source_pool_name}' not found in target environment.\033[0m")
+        print("[INFO] Please select an agent pool for this pipeline:")
+        
+        chosen_pool = choose_agent_pool(available_target_pools)
+        matched_queue = find_queue_for_pool(available_queues, chosen_pool["id"])
 
-        if default_pool:
-            print(f"[INFO] Defaulting to 'Azure Pipelines' agent pool.")
-            matched_queue = find_queue_for_pool(available_queues, default_pool["id"])
-
+        if matched_queue:
+            print(f"[INFO] Using selected agent pool: '{chosen_pool['name']}'")
+            
             queue_section["id"] = matched_queue["id"]
             queue_section["name"] = matched_queue["name"]
             queue_section["url"] = f"{TARGET_ORGANIZATION}/_apis/build/Queues/{matched_queue["id"]}"
 
             queue_section["pool"] = {
-                "id": default_pool["id"],
-                "name": default_pool["name"],
-                "isHosted": default_pool.get("isHosted", True)
+                "id": chosen_pool["id"],
+                "name": chosen_pool["name"],
+                "isHosted": chosen_pool.get("isHosted", False)
             }
 
             queue_links = pipeline_json_config.get('queue', {}).get('_links', {})
@@ -499,7 +502,7 @@ def update_queue_section(pipeline_json_config, available_pools_map, available_ta
                 pipeline_json_config['queue']['_links'] = queue_links
 
         else:
-            raise Exception("No matching agent pool found, and 'Azure Pipelines' pool is not available.")
+            raise Exception(f"\033[1;31mNo queue found for selected pool '{chosen_pool['name']}' in '{TARGET_ORGANIZATION}'.\033[0m")
         
     return pipeline_json_config
 

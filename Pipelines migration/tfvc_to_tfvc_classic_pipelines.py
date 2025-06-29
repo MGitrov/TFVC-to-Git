@@ -747,6 +747,41 @@ def adjust_pipeline_config(pipeline_json_config):
     links['badge'] = {
         "href": f"{TARGET_ORGANIZATION}/{target_project_id}/_apis/build/status/{target_pipeline_id}"
     }
+
+    # Adjusts 'jobAuthorizationScope' fields.
+    if "jobAuthorizationScope" in pipeline_json_config:
+        job_auth_scope = pipeline_json_config["jobAuthorizationScope"]
+
+        if job_auth_scope == 0:
+            pipeline_json_config["jobAuthorizationScope"] = "projectCollection"
+
+        elif job_auth_scope == 1:
+            pipeline_json_config["jobAuthorizationScope"] = "project"
+
+        elif job_auth_scope == 2:
+            pipeline_json_config["jobAuthorizationScope"] = "project"
+
+        elif isinstance(job_auth_scope, int):
+            # Defaults to project collection if the integer is unknown.
+            pipeline_json_config["jobAuthorizationScope"] = "projectCollection"
+
+    if "process" in pipeline_json_config and "phases" in pipeline_json_config["process"]:
+        for phase in pipeline_json_config["process"]["phases"]:
+
+            if "jobAuthorizationScope" in phase:
+                job_auth_scope = phase["jobAuthorizationScope"]
+
+                if job_auth_scope == 0:
+                    phase["jobAuthorizationScope"] = "projectCollection"
+
+                elif job_auth_scope == 1:
+                    phase["jobAuthorizationScope"] = "project"
+
+                elif job_auth_scope == 2:
+                    phase["jobAuthorizationScope"] = "project"
+
+                elif isinstance(job_auth_scope, int):
+                    phase["jobAuthorizationScope"] = "projectCollection"
     
     # Adjusts task groups.
     pipeline_json_config = handle_task_groups(pipeline_json_config)

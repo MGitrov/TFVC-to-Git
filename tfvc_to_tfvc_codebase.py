@@ -985,7 +985,6 @@ def save_migration_state(last_processed_changeset, branch_changeset, all_changes
         "Remaining changesets": remaining_changesets
     }
     
-    # Save the state information to a JSON file
     state_file_path = os.path.join(script_directory, f"migration_state_{timestamp}.json")
 
     with open(state_file_path, "w") as state_file:
@@ -1006,20 +1005,20 @@ def save_migration_state(last_processed_changeset, branch_changeset, all_changes
         instructions_file.write(f"• Branch creation changeset requiring manual handling: {branch_changeset}\n\n")
         
         instructions_file.write("MANUAL STEPS REQUIRED (PARENT BRANCH):\n")
-        instructions_file.write(f"1. From your local source path ('{local_source_path}'), execute 'tf get \"{source_server_path}\" /version:C{branch_changeset} /recursive /force'.\n")
-        instructions_file.write(f"2. Once fetched, copy all the contents of the '{local_source_path}' directory to the '{local_target_path}' directory.\n")
-        instructions_file.write(f"3. From your local target path ('{local_target_path}'), execute 'tf add * /recursive'.\n")
-        instructions_file.write("4. Execute 'tf checkin /comment:<your_comment_here> /noprompt'.\n")
+        instructions_file.write(f"1. From your local source path ('{local_source_path}'), execute 'tf get \"{source_server_path}\" /version:C{branch_changeset} /recursive'.\n")
+        instructions_file.write(f"2. Once fetched, copy all the fetched content from the '{local_source_path}' directory to the '{local_target_path}' directory.\n")
+        instructions_file.write(f"3. From your local target path ('{local_target_path}'), execute 'tf add * /recursive' (adjust accordingly).\n")
+        instructions_file.write("4. Execute 'tf checkin /comment:<your_comment_here> /noprompt /recursive /force /noautoresolve'.\n")
         instructions_file.write("5. From Visual Studio, convert the parent folder to a branch.\n\n")
         
         instructions_file.write("MANUAL STEPS REQUIRED (NON-PARENT BRANCH):\n")
         instructions_file.write(f"1. From your local target path ('{local_target_path}'), execute 'tf branch '<parent_branch_target_server_path (e.g., $/...)>' '<new_branch_target_server_path (e.g., $/...)>''.\n")
-        instructions_file.write("2. Execute 'tf checkin /comment:<your_comment_here> /noprompt'.\n\n")
+        instructions_file.write("2. Execute 'tf checkin /comment:<your_comment_here> /noprompt /recursive /force /noautoresolve'.\n\n")
         
         instructions_file.write("MANUAL STEPS REQUIRED (NESTED BRANCH - BRANCH WITHIN A FOLDER):\n")
         instructions_file.write(f"1. In your local target path ('{local_target_path}'), create the folder (either using the 'mkdir' command or UI) in which the branch resides.\n")
-        instructions_file.write("2. Execute 'tf add * /recursive'.\n")
-        instructions_file.write("3. Execute 'tf checkin /comment:<your_comment_here> /noprompt'.\n")
+        instructions_file.write("2. Execute 'tf add * /recursive' (adjust accordingly).\n")
+        instructions_file.write("3. Execute 'tf checkin /comment:<your_comment_here> /noprompt /recursive /force /noautoresolve'.\n")
         instructions_file.write("4. Follow the 'non-parent branch' steps.\n\n")
         
         instructions_file.write("TO RESUME MIGRATION:\n")
@@ -1035,13 +1034,14 @@ def save_migration_state(last_processed_changeset, branch_changeset, all_changes
         instructions_file.write("REMAINING CHANGESETS TO PROCESS:\n")
         if remaining_changesets:
             instructions_file.write(f"• Remaining changesets: {remaining_changesets}\n")
+
         else:
             instructions_file.write("• No remaining changesets (branch creation was the last changeset).\n")
     
-    print("\n" + "\033[1m!\033[0m" * 100)
+    print("\n" + "\033[1m=\033[0m" * 100)
     print(f"\033[1;33m[INFO] Migration state saved to: {state_file_path}\033[0m")
     print(f"\033[1;33m[INFO] Instructions for resuming migration saved to: {instructions_file_path}\033[0m")
-    print("\033[1m!\033[0m" * 100)
+    print("\033[1m=\033[0m" * 100)
 
 def process_repository_changesets(history_file):
     """

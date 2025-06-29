@@ -932,25 +932,26 @@ def process_regular_changeset(changeset_id):
 
 def copy_files_recursively(source_local_directory, target_local_directory):
     """
-    Copy all files from source directory to destination directory, recursively.
-    This utility function helps transfer files between workspaces.
+    This function copies files from the source workspace (where files are downloaded from the source TFVC server) to the target workspace 
+    (where they will be added to the target TFVC server).
     """
     for item in os.listdir(source_local_directory):
+        # Extracts the name of each file, and builds full paths for source and destination directories.
         source_item = os.path.join(source_local_directory, item)
-        dest_item = os.path.join(target_local_directory, item)
+        destination_item = os.path.join(target_local_directory, item)
         
-        # Skip the .tf directory which contains workspace information
+        # Skips the ".tf" directory as it contains each workspace TFS metadata, and copying it would corrupt the target workspace.
         if item == '.tf':
             continue
             
+        # If the source item is a directory, a respective target directory should exist in the target workspace.
         if os.path.isdir(source_item):
-            # Create the directory if it doesn't exist
-            os.makedirs(dest_item, exist_ok=True)
-            # Recursively copy contents
-            copy_files_recursively(source_item, dest_item)
+            os.makedirs(destination_item, exist_ok=True) # 'exist_ok=True' means "do not error if directories already exist".
+            copy_files_recursively(source_item, destination_item) # Recursive call.
+
+        # The source item is a file.
         else:
-            # Copy the file
-            shutil.copy2(source_item, dest_item)
+            shutil.copy2(source_item, destination_item)
 
 def save_migration_state(last_processed_changeset, branch_changeset, all_changesets):
     """

@@ -8,6 +8,7 @@ import time
 import datetime
 import json
 import traceback
+import pyfiglet
 
 """
 CLARIFICATIONS:
@@ -379,7 +380,7 @@ def analyze_changeset(changeset_details, changeset_id):
             print(f"  • \033[1;38;5;214m[WARNING] Potential risks for changeset no. {changeset_id}: {', '.join(risk_factors)}\033[0m")
 
         else:
-            print(f"  • \033[1m[INFO]No obvious risk factors detected for changeset no. {changeset_id}.\033[0m")
+            print(f"  • \033[1m[INFO] No obvious risk factors detected for changeset no. {changeset_id}.\033[0m")
         
         return operations
             
@@ -903,7 +904,7 @@ def process_regular_changeset(changeset_id):
        )
        
        if checkin_result:
-           print(f"\n\033[1;32m[SUCCESS] Successfully processed changeset no. {changeset_id}.\033[0m")
+           #print(f"\n\033[1;32m[SUCCESS] Successfully processed changeset no. {changeset_id}.\033[0m")
            return True
        
        print(f"\n\033[1;38;5;214m[WARNING] Check-in attempt {retry_count + 1} failed.\033[0m")
@@ -1050,24 +1051,26 @@ def process_repository_changesets(history_file):
     Returns:
         tuple: (success_count, failure_count, stopped_at_changeset)
     """
+    os.system('cls' if os.name == 'nt' else 'clear')
+    ascii_art = pyfiglet.figlet_format("by codewizard", font="ogre")
+    print(ascii_art)
+
     print("\n" + "\033[1m=\033[0m" * 100)
     print(f"\033[1mSTARTING REPOSITORY MIGRATION\033[0m")
     print("\033[1m=\033[0m" * 100)
     
     # Fetches all changesets from repository's history file.
     start_time = time.time()
-    all_changesets = [18,19,20,21,22,23,24,25,26,27,28,29]
-    # Uncomment this to use the actual history file:
-    # all_changesets = parse_history_file(history_file=history_file)
+    all_changesets = parse_history_file(history_file=history_file)
     
     parse_time = time.time() - start_time
     
     if not all_changesets:
-        print("\033[1;31m[ERROR] Failed to get changesets from repository's history file.\033[0m")
+        print("\n\033[1;31m[ERROR] Failed to get changesets from repository's history file.\033[0m")
         return 0, 0, None
     
     total_changesets = len(all_changesets)
-    print(f"\nFound {total_changesets} changesets in repository's history file (took {parse_time:.2f} seconds).\033[0m")
+    print(f"\n\033[1m[INFO] Found {total_changesets} changesets in repository's history file (took {parse_time:.2f} seconds).\033[0m")
     
     # Counters.
     success_count = 0
@@ -1076,19 +1079,18 @@ def process_repository_changesets(history_file):
     
     # Processes the changesets sequentially.
     for index, changeset_id in enumerate(all_changesets):
-        # Calculate progress percentage
-        progress = (index + 1) / total_changesets * 100
+        progress = (index + 1) / total_changesets * 100 # Calculates progress percentage.
         
         # Checks whether this is an any branch creation changeset.
         if changeset_id in parent_branch_creation_changesets:
-            print(f"\n\033[1;33m[BRANCH CREATION DETECTED] Changeset {changeset_id} is a parent (trunk) branch creation changeset.\033[0m")
+            print(f"\n\033[1;33m[BRANCH CREATION DETECTED] Changeset no. {changeset_id} is a parent (trunk) branch creation changeset.\033[0m")
             save_migration_state(last_processed_changeset, changeset_id, all_changesets)
             
             # The script will exit within the 'handle_branch_creation_changeset' function, but just in case.
             return success_count, failure_count, changeset_id
             
         if changeset_id in branch_creation_changesets:
-            print(f"\n\033[1;33m[BRANCH CREATION DETECTED] Changeset {changeset_id} is a branch creation (non-parent) changeset.\033[0m")
+            print(f"\n\033[1;33m[BRANCH CREATION DETECTED] Changeset no. {changeset_id} is a branch creation (non-parent) changeset.\033[0m")
             save_migration_state(last_processed_changeset, changeset_id, all_changesets)
             
             # The script will exit within the 'handle_branch_creation_changeset' function, but just in case.
@@ -1103,11 +1105,11 @@ def process_repository_changesets(history_file):
                 success_count += 1
                 last_processed_changeset = changeset_id
                 changeset_time = time.time() - changeset_start_time
-                print(f"\n\033[1;32m[SUCCESS] Successfully processed changeset no. {changeset_id} (took {changeset_time:.2f} seconds).\033[0m")
+                print(f"\n\033[1;32m[SUCCESS] Successfully processed changeset no. {changeset_id} (took {changeset_time:.2f} seconds)!\033[0m")
 
             else:
                 failure_count += 1
-                print(f"\n\033[1;31m[FAILURE] Failed to process changeset no. {changeset_id}.\033[0m")
+                print(f"\n\033[1;31m[ERROR] Failed to process changeset no. {changeset_id}.\033[0m")
                 
             # Calculates estimated time remaining.
             elapsed_time = time.time() - start_time

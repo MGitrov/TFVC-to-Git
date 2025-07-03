@@ -740,6 +740,44 @@ def delete_file(server_path):
         print(f"\n\033[1;31m[ERROR] Failed to delete '{server_path}': {e}\033[0m")
         return False
 
+def filter_redundant_deletes(operations):
+    """
+    This function filters out unnecessary 'delete' operations when a parent directory is already being deleted.
+    """
+    delete_operations = [(op, path) for op, path in operations if op == 'delete']
+    non_delete_operations = [(op, path) for op, path in operations if op != 'delete']
+    
+    # If there are no delete operations, there is nothing to filter out.
+    if not delete_operations:
+        return operations
+    
+    # Sorts 'delete' operations by path length.
+    delete_operations.sort(key=lambda x: len(x[1]))
+    
+    filtered_deletes = []
+    deleted_parent_directories = set()
+    
+    # Checks whether the path is under any already-deleted parent directory.
+    for operation, path in delete_operations:
+        is_redundant = False
+        
+        for deleted_parent in deleted_parent_directories:
+            if path.startswith(deleted_parent + '/') or path == deleted_parent:
+                is_redundant = True
+                print(f"\033[1m[INFO] Skipping redundant 'delete' operation: '{path}' (parent '{deleted_parent}' already being deleted).\033[0m")
+                break
+        
+        if not is_redundant:
+            filtered_deletes.append((operation, path))
+            deleted_parent_directories.add(path)
+    
+    # Combines filtered 'delete' with non-delete operations.
+    optimized_operations = non_delete_operations + filtered_deletes
+    
+    print(f"\n\033[1m[INFO] Reduced {len(delete_operations)} delete operations to {len(filtered_deletes)} (saved {len(delete_operations) - len(filtered_deletes)} redundant operations)\033[0m")
+    
+    return optimized_operations
+
 def process_regular_changeset(changeset_id):
    """
    This function processes a regular (non-branch creation) changeset.

@@ -850,6 +850,10 @@ def process_regular_changeset(changeset_id):
    if not operations:
        # Falls back to original bulk processing approach.
        print(f"\n\033[1m[PROGRESS] Using bulk processing approach...\033[0m")
+
+       print(f"\n\033[1m[INFO] Cleaning target workspace directory (preserving .tf metadata)...\033[0m")
+       print(f"\033[1m[PROGRESS] Starting clean operation...\033[0m")
+       clean_target_workspace_content()
        
        # Step 3: Copies files and directories from the source local path to the local target path.
        print(f"\n\033[1m[INFO] Copying ALL files to '{local_target_path}' (local target path)...\033[0m")
@@ -858,28 +862,55 @@ def process_regular_changeset(changeset_id):
        print(f"\033[1;32m[SUCCESS] Successfully copied ALL files to '{local_target_path}' (local target path)!\033[0m")
 
        # Step 4: Stages all files for check-in.
-       print("\n\033[1m[INFO] Staging all files for check-in...\033[0m")
-       print(f"\033[1m[PROGRESS] Starting add operation...\033[0m")
+       #print("\n\033[1m[INFO] Staging all files for check-in...\033[0m")
+       #print(f"\033[1m[PROGRESS] Starting add operation...\033[0m")
 
-       add_result = execute_tf_command("add * /recursive /noprompt")
+       # Step 4: Reconciles workspace to detect all changes.
+       print("\n\033[1m[INFO] Reconciling workspace changes...\033[0m")
+       print(f"\033[1m[PROGRESS] Starting reconcile operation...\033[0m")
 
-       if not add_result:
-           print("\033[1;38;5;214m[WARNING] Failed to add files.\033[0m")
+       # Universal operation detection.
+       reconcile_result = execute_tf_command("reconcile /promote")
+       #add_result = execute_tf_command("add * /recursive /noprompt")
+
+       if reconcile_result:
+        print(f"\033[1;32m[SUCCESS] Successfully reconciled workspace changes!\033[0m")
 
        else:
-           print(f"\033[1m[PROGRESS] Add operation completed.\033[0m")
+        print("\033[1;38;5;214m[WARNING] Reconcile operation failed, falling back to add operation...\033[0m")
+        add_result = execute_tf_command("add * /recursive /noprompt")
+
+        if add_result:
+            print(f"\033[1m[PROGRESS] Add operation completed.\033[0m")
+        
+        print("\n\033[1m[INFO] Resolving any conflicts...\033[0m")
+        print(f"\033[1m[PROGRESS] Starting conflict resolution (KeepYours)...\033[0m")
+
+        resolve_result = execute_tf_command("resolve /auto:KeepYours /recursive")
+
+        if resolve_result:
+            print(f"\033[1;32m[SUCCESS] Successfully resolved conflicts!\033[0m")
+
+        else:
+            print("\033[1;38;5;214m[WARNING] No conflicts to resolve or resolve command failed.\033[0m")
+
+       #if not add_result:
+           #print("\033[1;38;5;214m[WARNING] Failed to add files.\033[0m")
+
+       #else:
+           #print(f"\033[1m[PROGRESS] Add operation completed.\033[0m")
 
        # Step 4.5: Resolves any conflicts that may have been triggered by the 'add' operation.
-       print("\n\033[1m[INFO] Resolving any conflicts...\033[0m")
-       print(f"\033[1m[PROGRESS] Starting conflict resolution (KeepYours)...\033[0m")
+       #print("\n\033[1m[INFO] Resolving any conflicts...\033[0m")
+       #print(f"\033[1m[PROGRESS] Starting conflict resolution (KeepYours)...\033[0m")
 
-       resolve_result = execute_tf_command("resolve /auto:KeepYours /recursive")
+       #resolve_result = execute_tf_command("resolve /auto:KeepYours /recursive")
 
-       if not resolve_result:
-           print("\033[1;38;5;214m[WARNING] No conflicts to resolve or resolve command failed.\033[0m")
+       #if not resolve_result:
+           #print("\033[1;38;5;214m[WARNING] No conflicts to resolve or resolve command failed.\033[0m")
 
-       else:
-           print(f"\033[1;32m[SUCCESS] Successfully resolved conflicts!\033[0m")
+       #else:
+           #print(f"\033[1;32m[SUCCESS] Successfully resolved conflicts!\033[0m")
 
    # Verifies files were successfully staged for check-in.
    final_status = execute_tf_command("status")
@@ -924,7 +955,7 @@ def process_regular_changeset(changeset_id):
            retry_count += 1
 
        else:
-           # Max retries reachedץ
+           # Max retries reached.
            print(f"\n\033[1;31m[ERROR] Failed to check-in the changeset no. {changeset_id} after {max_retries + 1} attempts.\033[0m")
            return False
    
@@ -953,6 +984,42 @@ def copy_files_recursively(source_local_directory, target_local_directory):
         # The source item is a file.
         else:
             shutil.copy2(source_item, destination_item)
+
+def clean_target_workspace_content():
+    """
+    This function removes all content from the target workspace directory while preserving the ".tf" (or "$tf") folder (TFS metadata). 
+    Creates a "clean slate" so that after copying from source workspace directory, the target workspace directory contains exactly and only what should exist in the current changeset.
+    """
+    items_removed = 0
+    
+    for item in os.listdir(local_target_path):
+        # Skips the ".tf" directory as it contains the workspace TFS metadata.
+        if item == '.tf':
+            continue
+
+        item_path = os.path.join(local_target_path, item)
+
+        try:
+            # Removes directories.
+            if os.path.isdir(item_path):
+                shutil.rmtree(item_path)
+                print(f"\033[1;33m[CLEANUP] Removed directory: '{item}'\033[0m")
+                items_removed += 1
+
+            # Removes files.
+            else:
+                os.remove(item_path)
+                print(f"\033[1;33m[CLEANUP] Removed file: '{item}'\033[0m")
+                items_removed += 1
+
+        except Exception as e:
+            print(f"\n\033[1;38;5;214m[WARNING] Could not delete '{item}': {e}\033[0m")
+    
+    if items_removed > 0:
+        print(f"\n\033[1;32m[SUCCESS] Successfully cleaned {items_removed} items from the target workspace!\033[0m")
+
+    else:
+        print(f"\n\033[1m[INFO] Target workspace was already clean.\033[0m")
 
 def save_migration_state(last_processed_changeset, branch_changeset, all_changesets):
     """

@@ -734,6 +734,20 @@ def delete_file(server_path):
         
         # Marks file for deletion for the next check-in.
         result = execute_tf_command(f'delete "{local_file}" /noprompt')
+
+        # Physically deletes the file from the local target workspace directory.
+        if result and os.path.exists(local_file):
+            try:
+                if os.path.isdir(local_file):
+                    shutil.rmtree(local_file)
+
+                else:
+                    os.remove(local_file)
+                print(f"\033[1;32m[SUCCESS] Physically deleted: '{local_file}'\033[0m")
+
+            except Exception as e:
+                print(f"\033[1;38;5;214m[WARNING] Couldn't physically delete '{local_file}': {e}\033[0m")
+
         return bool(result)
         
     except Exception as e:
@@ -873,6 +887,9 @@ def process_regular_changeset(changeset_id):
    print(f"Current working directory: {os.getcwd()}\n")
    
    if operations:
+       operations = filter_redundant_deletes(operations)
+   
+   if operations:
        # Uses targeted approach - only changed files are processed.
        print(f"\n\033[1m[PROGRESS] Using targeted processing for {len(operations)} operations...\033[0m")
        
@@ -908,7 +925,7 @@ def process_regular_changeset(changeset_id):
        print(f"\033[1m[PROGRESS] Starting reconcile operation...\033[0m")
 
        # Universal operation detection.
-       reconcile_result = execute_tf_command("reconcile /promote")
+       reconcile_result = execute_tf_command("reconcile /promote /noprompt")
        #add_result = execute_tf_command("add * /recursive /noprompt")
 
        if reconcile_result:
